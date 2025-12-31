@@ -1,25 +1,11 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-  Alert,
-  TextInput,
-} from "react-native";
+import React, { useState, useEffect, useCallback } from "react";
+import { View, Text, ScrollView, TouchableOpacity, Image, Alert, TextInput } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
-import {
-  Camera,
-  Image as ImageIcon,
-  X,
-  ArrowLeft,
-  ArrowRight,
-  Plus,
-} from "lucide-react-native";
+import { Camera, Image as ImageIcon, X, ArrowLeft, ArrowRight, Plus } from "lucide-react-native";
 import { useTheme } from "@/utils/theme";
 import { getDraftRequest, saveDraftRequest } from "../../utils/storage";
 
@@ -48,12 +34,19 @@ export default function PhotoUpload() {
   const [photos, setPhotos] = useState({});
   const [weights, setWeights] = useState({});
 
-  useEffect(() => {
-    loadDraft();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadDraft();
+
+      return () => {
+        // optional cleanup when screen loses focus
+      };
+    }, [loadDraft])
+  );
 
   const loadDraft = async () => {
     const draft = await getDraftRequest();
+    console.log("draft:::", draft)
     if (draft && draft.categories) {
       setCategories(draft.categories);
       if (draft.photos) {
@@ -120,20 +113,24 @@ export default function PhotoUpload() {
 
   const handleContinue = async () => {
     // Check if all categories have at least 1 photo
-    const missingPhotos = categories.filter(
-      (cat) => !photos[cat] || photos[cat].length === 0,
-    );
+    const missingPhotos = categories.filter((catObj) => {
+      const id = Object.keys(catObj)[0];
+      return !photos[id] || photos[id].length === 0;
+    });
 
     if (missingPhotos.length > 0) {
       Alert.alert(
         "Photos Required",
         `Please add at least 1 photo for: ${missingPhotos
-          .map((id) => categoryNames[id])
-          .join(", ")}`,
+          .map((catObj) => {
+            const id = Object.keys(catObj)[0];
+            return categoryNames[id] || id;
+          })
+          .join(", ")}`
       );
       return;
     }
-
+    
     const draft = await getDraftRequest();
     await saveDraftRequest({
       ...draft,
@@ -148,9 +145,10 @@ export default function PhotoUpload() {
     (sum, imgs) => sum + imgs.length,
     0,
   );
-  const allCategoriesHavePhotos = categories.every(
-    (cat) => photos[cat] && photos[cat].length > 0,
-  );
+  const allCategoriesHavePhotos = categories.every((catObj) => {
+    const id = Object.keys(catObj)[0];
+    return photos[id] && photos[id].length > 0;
+  });
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
@@ -241,7 +239,9 @@ export default function PhotoUpload() {
         </View>
 
         {/* Category Sections */}
-        {categories.map((categoryId, index) => {
+        {categories.map((categoryObj, index) => {
+          const categoryId = Object.keys(categoryObj)[0];
+          const categoryName = categoryObj[categoryId];
           const categoryColor = categoryColors[categoryId];
 
           return (
@@ -292,7 +292,7 @@ export default function PhotoUpload() {
                         flex: 1,
                       }}
                     >
-                      {categoryNames[categoryId]}
+                      {categoryName}
                       <Text style={{ color: theme.colors.error }}>*</Text>
                     </Text>
                     <View

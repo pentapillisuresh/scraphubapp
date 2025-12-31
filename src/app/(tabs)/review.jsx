@@ -1,13 +1,5 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-  Alert,
-  Modal,
-} from "react-native";
+import React, { useState, useEffect, useCallback } from "react";
+import { View,Text,ScrollView,TouchableOpacity,Image,Alert,Modal} from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,6 +7,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Check, Edit, ArrowLeft, CheckCircle } from "lucide-react-native";
 import { useTheme } from "@/utils/theme";
 import { getDraftRequest, clearDraftRequest } from "../../utils/storage";
+import { useFocusEffect } from "expo-router";
+import ApiService from "../../utils/ApiService";
 
 const categoryNames = {
   paper: "Paper",
@@ -42,57 +36,88 @@ export default function Review() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [requestId, setRequestId] = useState("");
 
-  useEffect(() => {
-    loadDraft();
-  }, []);
-
-  const loadDraft = async () => {
-    const draft = await getDraftRequest();
-    if (draft) {
-      setDraftData(draft);
-    } else {
-      router.replace("/(tabs)/home");
-    }
-  };
+  useFocusEffect(
+    useCallback(() => {
+      // Define the async function inside the effect
+      async function fetchDraft() {
+        const draft = await getDraftRequest();
+        if (draft) {
+          setDraftData(draft);
+        } else {
+          router.replace("/(tabs)/home");
+        }
+      }
+  
+      // Call it immediately
+      fetchDraft();
+  
+      // Optionally return a cleanup function (or nothing)
+      return () => {};
+    }, [])
+  );
 
   const submitRequest = async () => {
-    setSubmitting(true);
-
     try {
-      // Generate request ID
-      const newRequestId = "SCR" + Date.now().toString().slice(-8);
-      const timestamp = new Date().toISOString();
-
-      // Save to orders
-      const ordersData = await AsyncStorage.getItem("orders");
-      const orders = ordersData ? JSON.parse(ordersData) : [];
-
-      const newOrder = {
-        id: newRequestId,
-        timestamp,
-        status: "pending",
-        categories: draftData.categories,
-        photos: draftData.photos,
-        weights: draftData.weights,
-        address: draftData.address,
-      };
-
-      orders.unshift(newOrder);
-      await AsyncStorage.setItem("orders", JSON.stringify(orders));
-
-      // Clear draft
+      setSubmitting(true);
+  
+      const formData = new FormData();
+  
+      formData.append("address_id", draftData.address_id);
+      formData.append("pickup_date", "2025-01-10");
+      formData.append("pickup_time_slot", "10AM–12PM");
+      formData.append("notes", "Scrap pickup");
+  
+      // Build items from categories
+      const items = draftData.categories.map((catObj) => {
+        const categoryId = Object.keys(catObj)[0];
+  
+        return {
+          category_id: Number(categoryId),
+          quantity: draftData.photos?.[categoryId]?.length || 1,
+          weight: Number(draftData.weights?.[categoryId] || 0),
+          estimated_value: 0,
+          description: catObj[categoryId],
+        };
+      });
+  
+      formData.append("items", JSON.stringify(items));
+  
+      // Attach images
+      Object.values(draftData.photos).flat().forEach((uri, index) => {
+        formData.append("images", {
+          uri,
+          name: `image_${index}.jpg`,
+          type: "image/jpeg",
+        });
+      });
+  
+      const token = await AsyncStorage.getItem("Token");
+  
+      const res = await ApiService.post(
+        "/scrap/requests",formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+  
+      if (!res.success) {
+        throw new Error("Failed to submit request");
+      }
+  
       await clearDraftRequest();
-
-      setRequestId(newRequestId);
       setShowSuccess(true);
-
+  
       setTimeout(() => {
         setShowSuccess(false);
         router.replace("/(tabs)/orders");
-      }, 3000);
-    } catch (error) {
-      console.error("Error submitting request:", error);
-      Alert.alert("Error", "Failed to submit request. Please try again.");
+      }, 2000);
+  
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Error", "Unable to submit request");
     } finally {
       setSubmitting(false);
     }
@@ -202,38 +227,43 @@ export default function Review() {
             </TouchableOpacity>
           </View>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {draftData.categories.map((cat) => (
-              <View
-                key={cat}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  backgroundColor: theme.colors.primary + "20",
-                  paddingHorizontal: 12,
-                  paddingVertical: 6,
-                  borderRadius: 16,
-                }}
-              >
+            {draftData.categories.map((catObj) => {
+              const categoryId = Object.keys(catObj)[0];
+              const categoryName = catObj[categoryId];
+
+              return (
                 <View
+                  key={categoryId}
                   style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 4,
-                    backgroundColor: categoryColors[cat],
-                    marginRight: 6,
-                  }}
-                />
-                <Text
-                  style={{
-                    fontSize: 14,
-                    color: theme.colors.primary,
-                    fontWeight: "500",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: theme.colors.primary + "20",
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 16,
                   }}
                 >
-                  {categoryNames[cat]}
-                </Text>
-              </View>
-            ))}
+                  <View
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 4,
+                      backgroundColor: categoryColors[categoryId],
+                      marginRight: 6,
+                    }}
+                  />
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      color: theme.colors.primary,
+                      fontWeight: "500",
+                    }}
+                  >
+                    {categoryName}
+                  </Text>
+                </View>
+              );
+            })}
           </View>
         </View>
 
@@ -283,14 +313,16 @@ export default function Review() {
             </TouchableOpacity>
           </View>
 
-          {draftData.categories.map((cat) => {
-            const categoryPhotos = draftData.photos?.[cat] || [];
-            const categoryWeight = draftData.weights?.[cat];
+          {draftData.categories.map((catObj) => {
+            const categoryId = Object.keys(catObj)[0];
+            const categoryName = catObj[categoryId];
+
+            const categoryPhotos = draftData.photos?.[categoryId] || [];
+            const categoryWeight = draftData.weights?.[categoryId];
 
             if (categoryPhotos.length === 0) return null;
-
             return (
-              <View key={cat} style={{ marginBottom: 20 }}>
+              <View key={categoryId} style={{ marginBottom: 20 }}>
                 <View
                   style={{
                     flexDirection: "row",
@@ -308,7 +340,7 @@ export default function Review() {
                         width: 12,
                         height: 12,
                         borderRadius: 6,
-                        backgroundColor: categoryColors[cat],
+                        backgroundColor: categoryColors[categoryId] || theme.colors.primary,
                         marginRight: 8,
                       }}
                     />
@@ -319,7 +351,7 @@ export default function Review() {
                         color: theme.colors.text.primary,
                       }}
                     >
-                      {categoryNames[cat]}
+                      {categoryNames[categoryId]}
                     </Text>
                   </View>
 
@@ -515,20 +547,18 @@ export default function Review() {
                 <Edit size={18} color={theme.colors.primary} />
               </TouchableOpacity>
             </View>
-            <Text
-              style={{
-                fontSize: 14,
-                color: theme.colors.text.primary,
-                lineHeight: 20,
-              }}
-            >
-              {draftData.address?.address}
+            <Text style={{ fontSize: 14, lineHeight: 20 }}>
+              {draftData.address.address_line1}
+              {draftData.address.address_line2
+                ? `, ${draftData.address.address_line2}`
+                : ""}
               {"\n"}
-              {draftData.address?.city} - {draftData.address?.pincode}
-              {draftData.address?.landmark
+              {draftData.address.city} - {draftData.address.pincode}
+              {draftData.address.landmark
                 ? `\n${draftData.address.landmark}`
                 : ""}
             </Text>
+
           </View>
         )}
       </ScrollView>

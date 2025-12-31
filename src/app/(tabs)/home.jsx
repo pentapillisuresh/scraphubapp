@@ -1,92 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-  Dimensions,
-  FlatList,
-  Animated
-} from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Image, Dimensions, FlatList, Animated } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  Newspaper,
-  Wine,
-  Smartphone,
-  Cpu,
-  Box,
-  Trash2,
-  ArrowRight,
-  ChevronRight,
-  Star,
-  Clock,
-  TrendingUp
-} from "lucide-react-native";
+import { ArrowRight, ChevronRight,Package, Star, Clock, TrendingUp } from "lucide-react-native";
 import { useTheme } from "@/utils/theme";
-import {
-  getUserData,
-  getDraftRequest,
-  saveDraftRequest,
-} from "../../utils/storage";
+import { getUserData, getDraftRequest, saveDraftRequest,clearDraftRequest } from "../../utils/storage";
+import ApiService from "../../utils/ApiService";
 // import { scrap1, scrap2, scrap3, scrap4 } from '../../assets/images';
 
 const { width } = Dimensions.get('window');
 
-const categories = [
-  {
-    id: "paper",
-    name: "Paper",
-    icon: Newspaper,
-    color: "#FF6B6B",
-    description: "Newspaper, cardboard, books",
-    image: "https://images.unsplash.com/photo-1605000797499-95e51e263fc4?w=800&auto=format&fit=crop"
-  },
-  {
-    id: "plastic",
-    name: "Plastic",
-    icon: Wine,
-    color: "#4ECDC4",
-    description: "Bottles, containers, packaging",
-    image: "https://images.unsplash.com/photo-1629198720835-2806f64f33b1?w=800&auto=format&fit=crop"
-  },
-  {
-    id: "metal",
-    name: "Metal",
-    icon: Box,
-    color: "#95A5A6",
-    description: "Steel, aluminum, copper",
-    image: "https://images.unsplash.com/photo-1519280213071-72c4a1200329?w-800&auto=format&fit=crop"
-  },
-  {
-    id: "electronics",
-    name: "Electronics",
-    icon: Smartphone,
-    color: "#3498DB",
-    description: "Phones, laptops, cables",
-    image: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800&auto=format&fit=crop"
-  },
-  {
-    id: "appliances",
-    name: "Appliances",
-    icon: Cpu,
-    color: "#9B59B6",
-    description: "Fridges, ACs, washing machines",
-    image: "https://images.unsplash.com/photo-1565693411366-84c43d6ac1ec?w=800&auto=format&fit=crop"
-  },
-  {
-    id: "other",
-    name: "Other",
-    icon: Trash2,
-    color: "#E67E22",
-    description: "Miscellaneous scrap items",
-    image: "https://images.unsplash.com/photo-1575408264798-b50b252663e6?w=800&auto=format&fit=crop"
-  },
-];
-
-// Carousel images - professional scrap-related images
 const carouselImages = [
   {
     id: "1",
@@ -132,6 +56,32 @@ export default function Home() {
   const flatListRef = useRef(null);
   const isMounted = useRef(true);
   const hasLoadedData = useRef(false);
+  const [categories, setCategories] = useState([]);
+
+  const loadCategories = useCallback(async () => {
+    try {
+      const response = await ApiService.get("/categories",{
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      if (response.success) {
+        // Map API data to UI-friendly format
+        const formattedCategories = response.data.map((item) => ({
+          id: item.id,
+          name: item.name,
+          description: item.description,
+          image: item.icon || null,   // 👈 API icon URL
+          color: theme.colors.primary, // fallback color
+          icon: Package,// 👈 reuse an icon component (or change per category)
+        }));
+
+        setCategories(formattedCategories);
+      }
+    } catch (error) {
+      console.error("Failed to load categories:", error);
+    }
+  }, [theme.colors.primary]); 
 
   useEffect(() => {
     isMounted.current = true;
@@ -158,38 +108,39 @@ export default function Home() {
   }, []); // Empty dependency array - runs only once on mount
 
   useEffect(() => {
-    // Save selected categories to draft whenever they change
-    if (!isLoading) {
-      saveSelectedCategories();
+    const clearDraft=async ()=>{
+
+      await  clearDraftRequest()
     }
-  }, [selectedCategories, isLoading]);
+    clearDraft()
+  }, [isLoading]);
 
   const loadData = useCallback(async () => {
     if (!isMounted.current) return;
-
+  
     setIsLoading(true);
-
+  
     try {
-      // Load user data
       const userData = await getUserData();
       if (userData && isMounted.current) {
         setUserName(userData.name);
       }
-
-      // Load draft data
-      const draft = await getDraftRequest();
-      if (draft && draft.categories && isMounted.current) {
-        setSelectedCategories(draft.categories);
-      }
+  
+      // const draft = await getDraftRequest();
+      // if (draft?.categories && isMounted.current) {
+      //   setSelectedCategories(draft.categories);
+      // }
+  
+      await loadCategories();
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
       if (isMounted.current) {
         setIsLoading(false);
       }
-    }
-  }, []);
-
+    } 
+  }, [loadCategories]);
+  
   const saveSelectedCategories = useCallback(async () => {
     try {
       const draft = await getDraftRequest() || {};
@@ -202,12 +153,21 @@ export default function Home() {
     }
   }, [selectedCategories]);
 
-  const toggleCategory = useCallback((categoryId) => {
+  const toggleCategory = useCallback((categoryObj) => {
+    const categoryId = Object.keys(categoryObj)[0];
+  
     setSelectedCategories((prev) => {
-      if (prev.includes(categoryId)) {
-        return prev.filter((id) => id !== categoryId);
+      const exists = prev.some(
+        (item) => Object.keys(item)[0] === categoryId
+      );
+  
+      if (exists) {
+        return prev.filter(
+          (item) => Object.keys(item)[0] !== categoryId
+        );
       }
-      return [...prev, categoryId];
+  
+      return [...prev, categoryObj];
     });
   }, []);
 
@@ -221,103 +181,103 @@ export default function Home() {
     router.push("/(tabs)/photo-upload");
   }, [selectedCategories, saveSelectedCategories]);
 
- const renderCarouselItem = useCallback(({ item, index }) => {
-   const inputRange = [
-     (index - 1) * width,
-     index * width,
-     (index + 1) * width,
-   ];
+  const renderCarouselItem = useCallback(({ item, index }) => {
+    const inputRange = [
+      (index - 1) * width,
+      index * width,
+      (index + 1) * width,
+    ];
 
-   const scale = scrollX.interpolate({
-     inputRange,
-     outputRange: [0.9, 1, 0.9],
-     extrapolate: 'clamp',
-   });
+    const scale = scrollX.interpolate({
+      inputRange,
+      outputRange: [0.9, 1, 0.9],
+      extrapolate: 'clamp',
+    });
 
-   const opacity = scrollX.interpolate({
-     inputRange,
-     outputRange: [0.7, 1, 0.7],
-   });
+    const opacity = scrollX.interpolate({
+      inputRange,
+      outputRange: [0.7, 1, 0.7],
+    });
 
-   // Get the correct image source
-   let imageSource;
+    // Get the correct image source
+    let imageSource;
 
-   if (typeof item.image === 'number') {
-     // This is a local image from require() - it returns a number
-     imageSource = item.image;
-   } else if (typeof item.image === 'string') {
-     // This is a URL string
-     imageSource = { uri: item.image };
-   } else if (item.image && item.image.uri) {
-     // Already has uri property
-     imageSource = item.image;
-   } else {
-     // Fallback to a default image
-     imageSource = { uri: 'https://images.unsplash.com/photo-1611273426858-450d8e3c9fce?w=800&auto=format&fit=crop' };
-   }
+    if (typeof item.image === 'number') {
+      // This is a local image from require() - it returns a number
+      imageSource = item.image;
+    } else if (typeof item.image === 'string') {
+      // This is a URL string
+      imageSource = { uri: item.image };
+    } else if (item.image && item.image.uri) {
+      // Already has uri property
+      imageSource = item.image;
+    } else {
+      // Fallback to a default image
+      imageSource = { uri: 'https://images.unsplash.com/photo-1611273426858-450d8e3c9fce?w=800&auto=format&fit=crop' };
+    }
 
-   return (
-     <Animated.View
-       style={{
-         width: width - 48,
-         marginHorizontal: 8,
-         borderRadius: 20,
-         overflow: 'hidden',
-         transform: [{ scale }],
-         opacity,
-         elevation: 5,
-         shadowColor: "#000",
-         shadowOffset: {
-           width: 0,
-           height: 2,
-         },
-         shadowOpacity: 0.25,
-         shadowRadius: 3.84,
-       }}
-     >
-       <Image
-         source={imageSource}
-         style={{
-           width: '100%',
-           height: 180,
-           borderRadius: 20,
-         }}
-         resizeMode="cover"
-       />
-       <View
-         style={{
-           position: 'absolute',
-           bottom: 0,
-           left: 0,
-           right: 0,
-           backgroundColor: 'rgba(0,0,0,0.7)',
-           padding: 16,
-           borderBottomLeftRadius: 20,
-           borderBottomRightRadius: 20,
-         }}
-       >
-         <Text
-           style={{
-             fontSize: 20,
-             fontWeight: 'bold',
-             color: 'white',
-             marginBottom: 4,
-           }}
-         >
-           {item.title}
-         </Text>
-         <Text
-           style={{
-             fontSize: 14,
-             color: 'rgba(255,255,255,0.9)',
-           }}
-         >
-           {item.subtitle}
-         </Text>
-       </View>
-     </Animated.View>
-   );
- }, [scrollX]);
+    return (
+      <Animated.View
+        style={{
+          width: width - 48,
+          marginHorizontal: 8,
+          borderRadius: 20,
+          overflow: 'hidden',
+          transform: [{ scale }],
+          opacity,
+          elevation: 5,
+          shadowColor: "#000",
+          shadowOffset: {
+            width: 0,
+            height: 2,
+          },
+          shadowOpacity: 0.25,
+          shadowRadius: 3.84,
+        }}
+      >
+        <Image
+          source={imageSource}
+          style={{
+            width: '100%',
+            height: 180,
+            borderRadius: 20,
+          }}
+          resizeMode="cover"
+        />
+        <View
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            padding: 16,
+            borderBottomLeftRadius: 20,
+            borderBottomRightRadius: 20,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 20,
+              fontWeight: 'bold',
+              color: 'white',
+              marginBottom: 4,
+            }}
+          >
+            {item.title}
+          </Text>
+          <Text
+            style={{
+              fontSize: 14,
+              color: 'rgba(255,255,255,0.9)',
+            }}
+          >
+            {item.subtitle}
+          </Text>
+        </View>
+      </Animated.View>
+    );
+  }, [scrollX]);
 
   const renderPagination = useCallback(() => {
     return (
@@ -549,12 +509,13 @@ export default function Home() {
           >
             {categories.map((category) => {
               const Icon = category.icon;
-              const isSelected = selectedCategories.includes(category.id);
-
+              const isSelected = selectedCategories.some(
+                (item) => Object.keys(item)[0] === String(category.id)
+              );
               return (
                 <TouchableOpacity
                   key={category.id}
-                  onPress={() => toggleCategory(category.id)}
+                  onPress={() => toggleCategory({ [category.id]: category.name })}
                   style={{
                     width: "48%",
                     borderRadius: 16,

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -7,19 +7,32 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { User } from "lucide-react-native";
 import { useTheme } from "@/utils/theme";
 import { getUserData, saveUserData } from "../utils/storage";
+import ApiService from "../utils/ApiService";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function ProfileSetup() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const [userToken, setUserToken] = useState("");
+  const { phoneNumber } = useLocalSearchParams();
 
+  useEffect(() => {
+    const rrr = async () => {
+      const token = await AsyncStorage.getItem("Token");
+      console.log("rrr::", token)
+      setUserToken(token);
+    }
+    rrr();
+  })
   const handleContinue = async () => {
     setError("");
 
@@ -28,14 +41,40 @@ export default function ProfileSetup() {
       return;
     }
 
-    // Save user data with name
-    const userData = await getUserData();
-    await saveUserData({
-      ...userData,
-      name: name.trim(),
-    });
+    try {
+      const regPayload = {
+        phone: phoneNumber,
+        full_name: name.trim(),
+      }
+      const response = await ApiService.put(
+        "/user", regPayload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userToken}`,
+          },
+        }
+      );
 
-    router.replace("/(tabs)/home");
+      const data = await response.data;
+      // ✅ Save registered user data locally
+      await saveUserData({
+        id: data.id,
+        phone: data.phone,
+        name: data.full_name,
+      });
+      // ✅ Navigate to OTP verification screen
+      console.log('userUpdate:::', response)
+
+      router.replace({
+        pathname: "/(tabs)/home",
+        params: {
+          phoneNumber: data.phone,
+        },
+      });
+    } catch (err) {
+      setError("Network error. Please try again.");
+    }
   };
 
   return (
@@ -155,7 +194,7 @@ export default function ProfileSetup() {
               color: "white",
             }}
           >
-            Continue
+            Submit
           </Text>
         </TouchableOpacity>
       </View>

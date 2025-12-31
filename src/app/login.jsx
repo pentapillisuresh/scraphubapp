@@ -11,7 +11,8 @@ import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Recycle, Phone, CheckCircle, XCircle } from "lucide-react-native";
-import { useTheme } from "@/utils/theme";
+import { useTheme } from "../utils/theme";
+import ApiService from "../utils/ApiService";
 
 export default function Login() {
   const insets = useSafeAreaInsets();
@@ -19,6 +20,7 @@ export default function Login() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [error, setError] = useState("");
   const [isValid, setIsValid] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const validatePhoneNumber = (text) => {
     // Remove all non-digit characters
@@ -54,10 +56,9 @@ export default function Login() {
     return text;
   };
 
-  const handleSendOTP = () => {
+  const handleSendOTP = async () => {
     setError("");
 
-    // Validation
     if (!phoneNumber) {
       setError("Please enter your phone number");
       return;
@@ -68,14 +69,41 @@ export default function Login() {
       return;
     }
 
-    // Remove dashes if any
     const cleanNumber = phoneNumber.replace(/\D/g, '');
 
-    // Navigate to OTP screen
-    router.push({
-      pathname: "/otp",
-      params: { phoneNumber: cleanNumber },
-    });
+    try {
+      setLoading(true);
+      const logonPayload = {
+        phone: cleanNumber,
+      }
+      const response = await ApiService.post(
+        "/auth/login/phone", logonPayload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.success) {
+        router.push({
+          pathname: "/otp",
+          params: {
+            phoneNumber: response.phone,
+            otps: response.otp,              // ⚠️ For development only
+            expiresAt: response.expires_at,
+          },
+        });
+        setError(data.message);
+        return;
+      }
+      
+    } catch (err) {
+      console.log("error::", err.data.message)
+           setError(err.data.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Format the displayed phone number
@@ -156,8 +184,8 @@ export default function Login() {
               borderColor: error
                 ? theme.colors.error
                 : isValid
-                ? theme.colors.success
-                : theme.colors.border,
+                  ? theme.colors.success
+                  : theme.colors.border,
               borderRadius: 12,
               paddingHorizontal: 16,
               height: 56,
@@ -216,8 +244,8 @@ export default function Login() {
                 color: error
                   ? theme.colors.error
                   : isValid
-                  ? theme.colors.success
-                  : theme.colors.text.tertiary,
+                    ? theme.colors.success
+                    : theme.colors.text.tertiary,
               }}
             >
               {error || (isValid ? "✓ Valid phone number" : `Enter ${10 - phoneNumber.length} more digits`)}
@@ -236,7 +264,7 @@ export default function Login() {
         {/* Send OTP Button */}
         <TouchableOpacity
           onPress={handleSendOTP}
-          disabled={!isValid}
+          disabled={!isValid || loading}
           style={{
             backgroundColor: isValid ? theme.colors.primary : theme.colors.input.background,
             height: 56,
@@ -244,7 +272,7 @@ export default function Login() {
             justifyContent: "center",
             alignItems: "center",
             marginBottom: 16,
-            opacity: isValid ? 1 : 0.6,
+            opacity: isValid && !loading ? 1 : 0.6,
           }}
         >
           <Text
@@ -254,7 +282,7 @@ export default function Login() {
               color: isValid ? "white" : theme.colors.text.secondary,
             }}
           >
-            Send OTP
+            {loading ? "Sending OTP..." : "Send OTP"}
           </Text>
         </TouchableOpacity>
 

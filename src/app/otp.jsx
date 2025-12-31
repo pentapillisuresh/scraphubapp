@@ -13,23 +13,36 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowLeft } from "lucide-react-native";
 import { useTheme } from "@/utils/theme";
 import { saveUserData } from "../utils/storage";
+import ApiService from "../utils/ApiService";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function OTP() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
-  const { phoneNumber } = useLocalSearchParams();
-
+  const { phoneNumber, otps, expiresAt } = useLocalSearchParams();
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState("");
   const [timer, setTimer] = useState(30);
   const inputRefs = useRef([]);
 
   useEffect(() => {
+    if (otps && typeof otps === "string" && otps.length === 6) {
+      const otpArray = otps.split("");
+      setOtp(otpArray);
+  
+      // Auto verify after small delay
+      setTimeout(() => {
+        verifyOtp(otps);
+      }, 300);
+    }
+  }, [otps]);
+  
+  useEffect(() => {
     const interval = setInterval(() => {
       setTimer((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [phoneNumber]);
 
   const handleOtpChange = (value, index) => {
     setError("");
@@ -55,23 +68,72 @@ export default function OTP() {
   };
 
   const verifyOtp = async (otpCode) => {
-    // Mock verification - accept any 6-digit OTP
-    if (otpCode.length === 6) {
+    try {
+      if (otpCode.length !== 6) {
+        setError("Invalid OTP");
+        return;
+      }
+  const verifyPayload={
+    phone: phoneNumber,
+    otp: otps,
+  }
+      const response = await ApiService.post(
+        "auth/login/phone/verify",verifyPayload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+  
+  
+      if (!response.success) {
+        setError(response.message || "Invalid OTP");
+        return;
+      }
+  
+      // ✅ Save auth data
       await saveUserData({
+        id: response.user.id,
+        phone: response.user.phone,
+        name: response.user.full_name,
         isLoggedIn: true,
-        phoneNumber: phoneNumber,
       });
-      router.replace("/profile-setup");
-    } else {
-      setError("Invalid OTP");
+  await AsyncStorage.setItem("Token",response.token)
+      // ✅ Route based on profile completion
+      if (!response.user.full_name) {
+        router.push( {pathname: "/profile-setup", params: {
+          phoneNumber: response.phone,
+          otps: response.otp,              // ⚠️ For development only
+          expiresAt: response.expires_at,
+        }
+      });
+      } else {
+        router.replace("/(tabs)/home");
+      }
+    } catch (err) {
+      setError("Network error. Please try again.");
     }
   };
-
-  const handleResend = () => {
+  
+  const handleResend = async () => {
     setTimer(30);
     setOtp(["", "", "", "", "", ""]);
     setError("");
     inputRefs.current[0]?.focus();
+    const logonPayload = {
+      phone: phoneNumber,
+    }
+
+    const response = await ApiService.post(
+      "/auth/login/phone", logonPayload,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
   };
 
   return (
