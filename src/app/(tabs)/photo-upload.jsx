@@ -33,15 +33,23 @@ export default function PhotoUpload() {
   const [categories, setCategories] = useState([]);
   const [photos, setPhotos] = useState({});
   const [weights, setWeights] = useState({});
+  const [isCameraReady, setIsCameraReady] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
       loadDraft();
 
+      // Request permissions on focus
+      (async () => {
+        await ImagePicker.requestCameraPermissionsAsync();
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      })();
+
       return () => {
-        // optional cleanup when screen loses focus
+        // Cleanup when screen loses focus
+        setIsCameraReady(true);
       };
-    }, [loadDraft])
+    }, [])
   );
 
   const loadDraft = async () => {
@@ -62,47 +70,101 @@ export default function PhotoUpload() {
 
   const pickImage = async (categoryId, useCamera = false) => {
     try {
-      let result;
+      // Prevent multiple camera calls
+      if (!isCameraReady) return;
 
       if (useCamera) {
-        const permission = await ImagePicker.requestCameraPermissionsAsync();
-        if (!permission.granted) {
-          Alert.alert("Permission needed", "Camera permission is required");
+        setIsCameraReady(false);
+
+        // Request camera permissions with better handling
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+
+        if (status !== 'granted') {
+          Alert.alert(
+            "Permission Denied",
+            "Camera permission is required to take photos. Please enable it in settings.",
+            [
+              { text: "Cancel", style: "cancel" },
+              { text: "Open Settings", onPress: () => ImagePicker.getCameraPermissionsAsync() }
+            ]
+          );
+          setIsCameraReady(true);
           return;
         }
-        result = await ImagePicker.launchCameraAsync({
+
+        // Launch camera with cleanup
+        const result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
           allowsEditing: false,
           quality: 0.8,
+          exif: false,
+          base64: false,
         });
+
+        // Handle result
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          const newPhotos = { ...photos };
+          if (!newPhotos[categoryId]) {
+            newPhotos[categoryId] = [];
+          }
+          newPhotos[categoryId].push(result.assets[0].uri);
+          setPhotos(newPhotos);
+        }
+
+        // Add a small delay before allowing camera again
+        setTimeout(() => {
+          setIsCameraReady(true);
+        }, 500);
+
       } else {
-        result = await ImagePicker.launchImageLibraryAsync({
+        // For gallery
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+        if (!permission.granted) {
+          Alert.alert(
+            "Permission Denied",
+            "Gallery permission is required to select photos.",
+            [
+              { text: "Cancel", style: "cancel" },
+              { text: "Open Settings", onPress: () => ImagePicker.getMediaLibraryPermissionsAsync() }
+            ]
+          );
+          return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
           allowsEditing: false,
           allowsMultipleSelection: false,
           quality: 0.8,
+          selectionLimit: 1,
         });
-      }
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const newPhotos = { ...photos };
-        if (!newPhotos[categoryId]) {
-          newPhotos[categoryId] = [];
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          const newPhotos = { ...photos };
+          if (!newPhotos[categoryId]) {
+            newPhotos[categoryId] = [];
+          }
+          newPhotos[categoryId].push(result.assets[0].uri);
+          setPhotos(newPhotos);
         }
-        newPhotos[categoryId].push(result.assets[0].uri);
-        setPhotos(newPhotos);
       }
     } catch (error) {
       console.error("Error picking image:", error);
-      Alert.alert("Error", "Failed to pick image");
+      Alert.alert("Error", "Failed to pick image. Please try again.");
+      setIsCameraReady(true);
     }
   };
 
   const removePhoto = (categoryId, index) => {
     const newPhotos = { ...photos };
-    newPhotos[categoryId].splice(index, 1);
-    if (newPhotos[categoryId].length === 0) {
-      delete newPhotos[categoryId];
+    if (newPhotos[categoryId]) {
+      newPhotos[categoryId].splice(index, 1);
+      if (newPhotos[categoryId].length === 0) {
+        delete newPhotos[categoryId];
+      }
+      setPhotos(newPhotos);
     }
-    setPhotos(newPhotos);
   };
 
   const updateWeight = (categoryId, value) => {
@@ -130,7 +192,7 @@ export default function PhotoUpload() {
       );
       return;
     }
-    
+
     const draft = await getDraftRequest();
     await saveDraftRequest({
       ...draft,
@@ -142,9 +204,10 @@ export default function PhotoUpload() {
   };
 
   const totalPhotos = Object.values(photos).reduce(
-    (sum, imgs) => sum + imgs.length,
+    (sum, imgs) => sum + (imgs ? imgs.length : 0),
     0,
   );
+
   const allCategoriesHavePhotos = categories.every((catObj) => {
     const id = Object.keys(catObj)[0];
     return photos[id] && photos[id].length > 0;
@@ -243,6 +306,8 @@ export default function PhotoUpload() {
           const categoryId = Object.keys(categoryObj)[0];
           const categoryName = categoryObj[categoryId];
           const categoryColor = categoryColors[categoryId];
+          const categoryPhotos = photos[categoryId] || [];
+          const hasPhotos = categoryPhotos.length > 0;
 
           return (
             <View
@@ -321,14 +386,14 @@ export default function PhotoUpload() {
                       marginLeft: 20,
                     }}
                   >
-                    {photos[categoryId]?.length || 0} photo
-                    {photos[categoryId]?.length !== 1 ? "s" : ""}
+                    {categoryPhotos.length} photo
+                    {categoryPhotos.length !== 1 ? "s" : ""}
                   </Text>
                 </View>
               </View>
 
               {/* Photo Grid */}
-              {photos[categoryId] && photos[categoryId].length > 0 && (
+              {hasPhotos && (
                 <View
                   style={{
                     flexDirection: "row",
@@ -337,9 +402,9 @@ export default function PhotoUpload() {
                     marginBottom: 16,
                   }}
                 >
-                  {photos[categoryId].map((uri, photoIndex) => (
+                  {categoryPhotos.map((uri, photoIndex) => (
                     <View
-                      key={photoIndex}
+                      key={`${categoryId}-${photoIndex}`}
                       style={{
                         width: 80,
                         height: 80,
@@ -354,6 +419,7 @@ export default function PhotoUpload() {
                           height: "100%",
                           borderRadius: 8,
                         }}
+                        resizeMode="cover"
                       />
                       <TouchableOpacity
                         onPress={() => removePhoto(categoryId, photoIndex)}
@@ -370,6 +436,7 @@ export default function PhotoUpload() {
                           borderWidth: 2,
                           borderColor: theme.colors.card.background,
                         }}
+                        activeOpacity={0.7}
                       >
                         <X size={14} color="white" />
                       </TouchableOpacity>
@@ -379,6 +446,7 @@ export default function PhotoUpload() {
                   {/* Add more photos button */}
                   <TouchableOpacity
                     onPress={() => pickImage(categoryId, false)}
+                    disabled={!isCameraReady}
                     style={{
                       width: 80,
                       height: 80,
@@ -389,79 +457,87 @@ export default function PhotoUpload() {
                       justifyContent: "center",
                       alignItems: "center",
                       backgroundColor: theme.colors.input.background,
+                      opacity: isCameraReady ? 1 : 0.5,
                     }}
+                    activeOpacity={0.7}
                   >
                     <Plus size={24} color={theme.colors.text.secondary} />
                   </TouchableOpacity>
                 </View>
               )}
 
-              {/* Upload Buttons - Show only if no photos */}
-              {(!photos[categoryId] || photos[categoryId].length === 0) && (
-                <View
-                  style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}
+              {/* Upload Buttons - Show only if no photos or always show camera option */}
+              <View
+                style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}
+              >
+                <TouchableOpacity
+                  onPress={() => pickImage(categoryId, true)}
+                  disabled={!isCameraReady}
+                  style={{
+                    flex: 1,
+                    height: 48,
+                    borderRadius: 8,
+                    borderWidth: 1.5,
+                    borderColor: isCameraReady ? theme.colors.primary : theme.colors.border,
+                    borderStyle: "dashed",
+                    flexDirection: "row",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    backgroundColor: isCameraReady ? 'transparent' : theme.colors.input.background,
+                    opacity: isCameraReady ? 1 : 0.5,
+                  }}
+                  activeOpacity={0.7}
                 >
-                  <TouchableOpacity
-                    onPress={() => pickImage(categoryId, true)}
+                  <Camera
+                    size={18}
+                    color={isCameraReady ? theme.colors.primary : theme.colors.text.secondary}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
                     style={{
-                      flex: 1,
-                      height: 48,
-                      borderRadius: 8,
-                      borderWidth: 1.5,
-                      borderColor: theme.colors.primary,
-                      borderStyle: "dashed",
-                      flexDirection: "row",
-                      justifyContent: "center",
-                      alignItems: "center",
+                      fontSize: 14,
+                      fontWeight: "500",
+                      color: isCameraReady ? theme.colors.primary : theme.colors.text.secondary,
                     }}
                   >
-                    <Camera
-                      size={18}
-                      color={theme.colors.primary}
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        fontWeight: "500",
-                        color: theme.colors.primary,
-                      }}
-                    >
-                      Camera
-                    </Text>
-                  </TouchableOpacity>
+                    Camera
+                  </Text>
+                </TouchableOpacity>
 
-                  <TouchableOpacity
-                    onPress={() => pickImage(categoryId, false)}
+                <TouchableOpacity
+                  onPress={() => pickImage(categoryId, false)}
+                  disabled={!isCameraReady}
+                  style={{
+                    flex: 1,
+                    height: 48,
+                    borderRadius: 8,
+                    borderWidth: 1.5,
+                    borderColor: isCameraReady ? theme.colors.primary : theme.colors.border,
+                    borderStyle: "dashed",
+                    flexDirection: "row",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    backgroundColor: isCameraReady ? 'transparent' : theme.colors.input.background,
+                    opacity: isCameraReady ? 1 : 0.5,
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <ImageIcon
+                    size={18}
+                    color={isCameraReady ? theme.colors.primary : theme.colors.text.secondary}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
                     style={{
-                      flex: 1,
-                      height: 48,
-                      borderRadius: 8,
-                      borderWidth: 1.5,
-                      borderColor: theme.colors.primary,
-                      borderStyle: "dashed",
-                      flexDirection: "row",
-                      justifyContent: "center",
-                      alignItems: "center",
+                      fontSize: 14,
+                      fontWeight: "500",
+                      color: isCameraReady ? theme.colors.primary : theme.colors.text.secondary,
                     }}
                   >
-                    <ImageIcon
-                      size={18}
-                      color={theme.colors.primary}
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        fontWeight: "500",
-                        color: theme.colors.primary,
-                      }}
-                    >
-                      Gallery
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+                    Gallery
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
               {/* Weight Input (Optional) */}
               <View>
@@ -547,6 +623,7 @@ export default function PhotoUpload() {
               justifyContent: "center",
               alignItems: "center",
             }}
+            activeOpacity={0.8}
           >
             <Text
               style={{
