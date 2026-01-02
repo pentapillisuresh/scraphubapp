@@ -75,6 +75,7 @@ export default function Home() {
           color: theme.colors.primary, // fallback color
           icon: Package,// 👈 reuse an icon component (or change per category)
         }));
+        console.log("rrr:", formattedCategories);
 
         setCategories(formattedCategories);
       }
@@ -201,7 +202,6 @@ export default function Home() {
 
     // Get the correct image source
     let imageSource;
-
     if (typeof item.image === 'number') {
       // This is a local image from require() - it returns a number
       imageSource = item.image;
