@@ -367,7 +367,7 @@ export default function Orders() {
                   <Text style={{ color: "white" }}>Cancel</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
+                {/* <TouchableOpacity
                   onPress={() =>
                     router.push(`/reschedule/${selectedOrder.id}`)
                   }
@@ -380,7 +380,7 @@ export default function Orders() {
                   }}
                 >
                   <Text style={{ color: "white" }}>Reschedule</Text>
-                </TouchableOpacity>
+                </TouchableOpacity> */}
               </View>
             )}
 
