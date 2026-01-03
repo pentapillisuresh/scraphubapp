@@ -1,0 +1,42 @@
+{
+    "address": {
+        "address_line1": "fff",
+        "address_line2": "ere",
+        "city": "efv",
+        "country": "India",
+        "createdAt": "2025-12-31T07:00:33.000Z",
+        "id": 5,
+        "is_default": false,
+        "landmark": "x fv",
+        "latitude": null,
+        "longitude": null,
+        "pincode": "dvf",
+        "state": "ecd",
+        "updatedAt": "2025-12-31T07:00:33.000Z",
+        "user_id": 1
+    },
+    "address_id": 5,
+    "categories": [
+        {
+            "1": "Paper"
+        },
+        {
+            "2": "Plastic"
+        }
+    ],
+    "photos": {
+        "1": [
+            "file:///data/user/0/xyz.create.CreateExpoEnvironment/cache/ImagePicker/aa377da5-6b5b-4480-9791-bc4e2b29efeb.jpeg",
+            "file:///data/user/0/xyz.create.CreateExpoEnvironment/cache/ImagePicker/91ebb4da-27e1-4505-b538-ab0221b2531c.jpeg"
+        ],
+        "2": [
+            "file:///data/user/0/xyz.create.CreateExpoEnvironment/cache/ImagePicker/311c3fcc-54ff-4957-96c9-4d0834eb251d.jpeg",
+            "file:///data/user/0/xyz.create.CreateExpoEnvironment/cache/ImagePicker/58bdb14c-f79c-4794-9848-8e0d0d4dcb78.jpeg",
+            "file:///data/user/0/xyz.create.CreateExpoEnvironment/cache/ImagePicker/cba3b1f2-269b-479b-afb8-e1fa919d6ecc.jpeg"
+        ]
+    },
+    "weights": {
+        "1": "10",
+        "2": "25"
+    }
+}

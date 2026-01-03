@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View,Text,ScrollView,TouchableOpacity,Image,Alert,Modal} from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Modal } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -41,36 +41,37 @@ export default function Review() {
       // Define the async function inside the effect
       async function fetchDraft() {
         const draft = await getDraftRequest();
+        console.log("rrr:::", draft)
         if (draft) {
           setDraftData(draft);
         } else {
           router.replace("/(tabs)/home");
         }
       }
-  
+
       // Call it immediately
       fetchDraft();
-  
+
       // Optionally return a cleanup function (or nothing)
-      return () => {};
+      return () => { };
     }, [])
   );
 
   const submitRequest = async () => {
     try {
       setSubmitting(true);
-  
+
       const formData = new FormData();
-  
+
       formData.append("address_id", draftData.address_id);
-      formData.append("pickup_date", "2025-01-10");
-      formData.append("pickup_time_slot", "10AM–12PM");
-      formData.append("notes", "Scrap pickup");
-  
+      // formData.append("pickup_date", "2025-01-10");
+      // formData.append("pickup_time_slot", "10AM–12PM");
+      // formData.append("notes", "Scrap pickup");
+
       // Build items from categories
       const items = draftData.categories.map((catObj) => {
         const categoryId = Object.keys(catObj)[0];
-  
+
         return {
           category_id: Number(categoryId),
           quantity: draftData.photos?.[categoryId]?.length || 1,
@@ -79,22 +80,34 @@ export default function Review() {
           description: catObj[categoryId],
         };
       });
-  
+
       formData.append("items", JSON.stringify(items));
-  
+
       // Attach images
-      Object.values(draftData.photos).flat().forEach((uri, index) => {
-        formData.append("images", {
-          uri,
-          name: `image_${index}.jpg`,
-          type: "image/jpeg",
+      let imageIndex = 0;
+
+      draftData.categories.forEach((catObj, itemIndex) => {
+        const categoryId = Object.keys(catObj)[0];
+        const images = draftData.photos?.[categoryId] || [];
+      
+        images.forEach((uri) => {
+          formData.append("images", {
+            uri,
+            name: `image_${imageIndex}.jpg`,
+            type: "image/jpeg",
+          });
+      
+          // 👇 THIS IS THE MISSING PIECE
+          formData.append("image_item_index", itemIndex);
+      
+          imageIndex++;
         });
       });
-  
+      
       const token = await AsyncStorage.getItem("Token");
-  
+
       const res = await ApiService.post(
-        "/scrap/requests",formData,
+        "/scrap/requests", formData,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -102,19 +115,19 @@ export default function Review() {
           },
         }
       );
-  
+
       if (!res.success) {
         throw new Error("Failed to submit request");
       }
-  
+
       await clearDraftRequest();
       setShowSuccess(true);
-  
+
       setTimeout(() => {
         setShowSuccess(false);
-        router.replace("/(tabs)/orders");
+        // router.replace("/(tabs)/orders");
       }, 2000);
-  
+
     } catch (err) {
       console.error(err);
       Alert.alert("Error", "Unable to submit request");
