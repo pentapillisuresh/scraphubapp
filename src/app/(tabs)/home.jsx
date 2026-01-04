@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Image, Dimensions, FlatList, Animated } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Image, Dimensions, FlatList, Animated, RefreshControl } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowRight, ChevronRight,Package, Star, Clock, TrendingUp } from "lucide-react-native";
+import { ArrowRight, ChevronRight, Package, Star, Clock, TrendingUp } from "lucide-react-native";
 import { useTheme } from "@/utils/theme";
-import { getUserData, getDraftRequest, saveDraftRequest,clearDraftRequest } from "../../utils/storage";
+import { getUserData, getDraftRequest, saveDraftRequest, clearDraftRequest } from "../../utils/storage";
 import ApiService from "../../utils/ApiService";
-// import { scrap1, scrap2, scrap3, scrap4 } from '../../assets/images';
 
 const { width } = Dimensions.get('window');
 
@@ -52,40 +51,93 @@ export default function Home() {
   const [userName, setUserName] = useState("");
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [categories, setCategories] = useState([]);
+
   const scrollX = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef(null);
   const isMounted = useRef(true);
   const hasLoadedData = useRef(false);
-  const [categories, setCategories] = useState([]);
 
   const loadCategories = useCallback(async () => {
     try {
-      const response = await ApiService.get("/categories",{
+      const response = await ApiService.get("/categories", {
         headers: {
           "Content-Type": "application/json",
         },
       });
       if (response.success) {
-        // Map API data to UI-friendly format
         const formattedCategories = response.data.map((item) => ({
           id: item.id,
           name: item.name,
           description: item.description,
-          image: item.icon || null,   // 👈 API icon URL
-          color: theme.colors.primary, // fallback color
-          icon: Package,// 👈 reuse an icon component (or change per category)
+          image: item.icon || null,
+          color: theme.colors.primary,
+          icon: Package,
         }));
-        console.log("rrr:", formattedCategories);
-
         setCategories(formattedCategories);
       }
     } catch (error) {
       console.error("Failed to load categories:", error);
     }
-  }, [theme.colors.primary]); 
+  }, [theme.colors.primary]);
 
+  // Reset all local state
+  const resetState = useCallback(() => {
+    console.log("Resetting Home screen state...");
+    setSelectedCategories([]);
+    setCurrentIndex(0);
+    scrollX.setValue(0);
+
+    // Reset carousel to first image
+    if (flatListRef.current) {
+      flatListRef.current.scrollToIndex({ index: 0, animated: false });
+    }
+  }, [scrollX]);
+
+  const loadData = useCallback(async (isRefresh = false) => {
+    if (!isMounted.current) return;
+
+    if (!isRefresh) {
+      setIsLoading(true);
+    } else {
+      setRefreshing(true);
+    }
+
+    try {
+      const userData = await getUserData();
+      if (userData && isMounted.current) {
+        setUserName(userData.name);
+      }
+
+      // 🔥 IMPORTANT: Reset selected categories on every load
+      setSelectedCategories([]);
+
+      await loadCategories();
+
+      // 🔥 Clear any leftover draft data
+      await clearDraftRequest();
+
+    } catch (error) {
+      console.error("Error loading data:", error);
+    } finally {
+      if (isMounted.current) {
+        setIsLoading(false);
+        setRefreshing(false);
+      }
+    }
+  }, [loadCategories]);
+
+  const onRefresh = useCallback(() => {
+    loadData(true);
+  }, [loadData]);
+
+  // 🔥 Reset when component mounts
   useEffect(() => {
     isMounted.current = true;
+
+    // 🔥 Reset state first
+    resetState();
 
     // Load data only once on component mount
     if (!hasLoadedData.current) {
@@ -106,42 +158,36 @@ export default function Home() {
       isMounted.current = false;
       clearInterval(interval);
     };
-  }, []); // Empty dependency array - runs only once on mount
+  }, []); // Empty dependency array
 
+  // 🔥 Reset when screen comes into focus (user navigates back to Home)
+  useFocusEffect(
+    useCallback(() => {
+      console.log("Home screen focused, resetting state...");
+
+      // Reset local state
+      resetState();
+
+      // Clear any draft data that might be leftover
+      clearDraftRequest();
+
+      // Reload fresh data
+      loadData();
+
+      return () => {
+        // Optional cleanup when screen loses focus
+      };
+    }, [resetState, loadData])
+  );
+
+  // Clear draft on initial load
   useEffect(() => {
-    const clearDraft=async ()=>{
-
-      await  clearDraftRequest()
+    const clearDraft = async () => {
+      await clearDraftRequest();
     }
-    clearDraft()
-  }, [isLoading]);
+    clearDraft();
+  }, []);
 
-  const loadData = useCallback(async () => {
-    if (!isMounted.current) return;
-  
-    setIsLoading(true);
-  
-    try {
-      const userData = await getUserData();
-      if (userData && isMounted.current) {
-        setUserName(userData.name);
-      }
-  
-      // const draft = await getDraftRequest();
-      // if (draft?.categories && isMounted.current) {
-      //   setSelectedCategories(draft.categories);
-      // }
-  
-      await loadCategories();
-    } catch (error) {
-      console.error("Error loading data:", error);
-    } finally {
-      if (isMounted.current) {
-        setIsLoading(false);
-      }
-    } 
-  }, [loadCategories]);
-  
   const saveSelectedCategories = useCallback(async () => {
     try {
       const draft = await getDraftRequest() || {};
@@ -156,18 +202,18 @@ export default function Home() {
 
   const toggleCategory = useCallback((categoryObj) => {
     const categoryId = Object.keys(categoryObj)[0];
-  
+
     setSelectedCategories((prev) => {
       const exists = prev.some(
         (item) => Object.keys(item)[0] === categoryId
       );
-  
+
       if (exists) {
         return prev.filter(
           (item) => Object.keys(item)[0] !== categoryId
         );
       }
-  
+
       return [...prev, categoryObj];
     });
   }, []);
@@ -203,16 +249,12 @@ export default function Home() {
     // Get the correct image source
     let imageSource;
     if (typeof item.image === 'number') {
-      // This is a local image from require() - it returns a number
       imageSource = item.image;
     } else if (typeof item.image === 'string') {
-      // This is a URL string
       imageSource = { uri: item.image };
     } else if (item.image && item.image.uri) {
-      // Already has uri property
       imageSource = item.image;
     } else {
-      // Fallback to a default image
       imageSource = { uri: 'https://images.unsplash.com/photo-1611273426858-450d8e3c9fce?w=800&auto=format&fit=crop' };
     }
 
@@ -339,6 +381,7 @@ export default function Home() {
         justifyContent: 'center',
         alignItems: 'center'
       }}>
+        <StatusBar style={theme.isDark ? "light" : "dark"} />
         <View style={{
           width: 60,
           height: 60,
@@ -424,6 +467,14 @@ export default function Home() {
           paddingBottom: insets.bottom + 100,
         }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[theme.colors.primary]}
+            tintColor={theme.colors.primary}
+          />
+        }
       >
         {/* Carousel Section */}
         <View style={{ marginTop: 24 }}>

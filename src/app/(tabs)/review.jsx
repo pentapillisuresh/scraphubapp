@@ -1,14 +1,27 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Modal } from "react-native";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  Alert,
+  Modal,
+  Animated,
+  Dimensions,
+  ActivityIndicator
+} from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Check, Edit, ArrowLeft, CheckCircle } from "lucide-react-native";
+import { Check, Edit, ArrowLeft, CheckCircle, MapPin, Package, Camera, Home, Loader } from "lucide-react-native";
 import { useTheme } from "@/utils/theme";
 import { getDraftRequest, clearDraftRequest } from "../../utils/storage";
 import { useFocusEffect } from "expo-router";
 import ApiService from "../../utils/ApiService";
+
+const { width } = Dimensions.get('window');
 
 const categoryNames = {
   paper: "Paper",
@@ -35,43 +48,128 @@ export default function Review() {
   const [submitting, setSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [requestId, setRequestId] = useState("");
+  const [redirectTimer, setRedirectTimer] = useState(3);
+
+  // Animation values
+  const fadeAnim = useState(new Animated.Value(0))[0];
+  const scaleAnim = useState(new Animated.Value(0.9))[0];
+  const modalScale = useState(new Animated.Value(0.8))[0];
+  const modalOpacity = useState(new Animated.Value(0))[0];
+  const successIconScale = useState(new Animated.Value(0))[0];
 
   useFocusEffect(
     useCallback(() => {
-      // Define the async function inside the effect
       async function fetchDraft() {
         const draft = await getDraftRequest();
-        console.log("rrr:::", draft)
+        console.log("Draft data:", draft);
         if (draft) {
           setDraftData(draft);
+
+          // Animate content in
+          Animated.parallel([
+            Animated.timing(fadeAnim, {
+              toValue: 1,
+              duration: 400,
+              useNativeDriver: true,
+            }),
+            Animated.spring(scaleAnim, {
+              toValue: 1,
+              tension: 50,
+              friction: 7,
+              useNativeDriver: true,
+            }),
+          ]).start();
         } else {
           router.replace("/(tabs)/home");
         }
       }
 
-      // Call it immediately
       fetchDraft();
 
-      // Optionally return a cleanup function (or nothing)
-      return () => { };
+      return () => {
+        fadeAnim.setValue(0);
+        scaleAnim.setValue(0.9);
+      };
     }, [])
   );
+
+  const animateSuccessIcon = () => {
+    // Reset and animate success icon
+    successIconScale.setValue(0);
+    Animated.spring(successIconScale, {
+      toValue: 1,
+      tension: 100,
+      friction: 10,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const animateModalIn = () => {
+    modalScale.setValue(0.8);
+    modalOpacity.setValue(0);
+
+    Animated.parallel([
+      Animated.timing(modalOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.spring(modalScale, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      animateSuccessIcon();
+
+      // Start countdown for auto-navigation
+      const timerInterval = setInterval(() => {
+        setRedirectTimer((prev) => {
+          if (prev <= 1) {
+            clearInterval(timerInterval);
+            animateModalOut();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    });
+  };
+
+  const animateModalOut = () => {
+    Animated.parallel([
+      Animated.timing(modalOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(modalScale, {
+        toValue: 0.8,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setShowSuccess(false);
+      setRedirectTimer(3);
+       setDraftData(null);
+
+          // 🔥 Clear ALL draft data from storage
+          clearDraftRequest();
+      router.replace("/(tabs)/home");
+    });
+  };
 
   const submitRequest = async () => {
     try {
       setSubmitting(true);
 
       const formData = new FormData();
-
       formData.append("address_id", draftData.address_id);
-      // formData.append("pickup_date", "2025-01-10");
-      // formData.append("pickup_time_slot", "10AM–12PM");
-      // formData.append("notes", "Scrap pickup");
 
       // Build items from categories
       const items = draftData.categories.map((catObj) => {
         const categoryId = Object.keys(catObj)[0];
-
         return {
           category_id: Number(categoryId),
           quantity: draftData.photos?.[categoryId]?.length || 1,
@@ -85,29 +183,25 @@ export default function Review() {
 
       // Attach images
       let imageIndex = 0;
-
       draftData.categories.forEach((catObj, itemIndex) => {
         const categoryId = Object.keys(catObj)[0];
         const images = draftData.photos?.[categoryId] || [];
-      
+
         images.forEach((uri) => {
           formData.append("images", {
             uri,
             name: `image_${imageIndex}.jpg`,
             type: "image/jpeg",
           });
-      
-          // 👇 THIS IS THE MISSING PIECE
           formData.append("image_item_index", itemIndex);
-      
           imageIndex++;
         });
       });
-      
-      const token = await AsyncStorage.getItem("Token");
 
+      const token = await AsyncStorage.getItem("Token");
       const res = await ApiService.post(
-        "/scrap/requests", formData,
+        "/scrap/requests",
+        formData,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -120,24 +214,56 @@ export default function Review() {
         throw new Error("Failed to submit request");
       }
 
+      // Generate a request ID
+      const generatedId = `SCR${Math.floor(100000 + Math.random() * 900000)}`;
+      setRequestId(generatedId);
+
       await clearDraftRequest();
       setShowSuccess(true);
-
-      setTimeout(() => {
-        setShowSuccess(false);
-        // router.replace("/(tabs)/orders");
-      }, 2000);
+      animateModalIn();
 
     } catch (err) {
-      console.error(err);
-      Alert.alert("Error", "Unable to submit request");
+      console.error("Submission error:", err);
+      Alert.alert(
+        "Submission Failed",
+        "Unable to submit request. Please try again.",
+        [{ text: "OK" }]
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
   if (!draftData) {
-    return null;
+    return (
+      <View style={{
+        flex: 1,
+        backgroundColor: theme.colors.background,
+        justifyContent: 'center',
+        alignItems: 'center'
+      }}>
+        <StatusBar style={theme.isDark ? "light" : "dark"} />
+        <View style={{
+          width: 80,
+          height: 80,
+          borderRadius: 40,
+          backgroundColor: theme.colors.primary + "20",
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginBottom: 20,
+        }}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+        <Text style={{
+          marginTop: 20,
+          fontSize: 16,
+          fontWeight: '500',
+          color: theme.colors.text.secondary
+        }}>
+          Loading request data...
+        </Text>
+      </View>
+    );
   }
 
   const totalPhotos = Object.values(draftData.photos || {}).reduce(
@@ -145,104 +271,216 @@ export default function Review() {
     0,
   );
 
+  const totalWeight = draftData.weights
+    ? Object.values(draftData.weights).reduce((sum, w) => sum + parseFloat(w || 0), 0)
+    : 0;
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <StatusBar style={theme.isDark ? "light" : "dark"} />
 
       {/* Header */}
-      <View
+      <Animated.View
         style={{
           paddingTop: insets.top + 16,
-          paddingHorizontal: 24,
+          paddingHorizontal: 20,
           paddingBottom: 16,
           backgroundColor: theme.colors.surface,
           borderBottomWidth: 1,
           borderBottomColor: theme.colors.border,
+          transform: [{ scale: scaleAnim }],
+          opacity: fadeAnim,
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <TouchableOpacity
             onPress={() => router.back()}
             style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
+              width: 44,
+              height: 44,
+              borderRadius: 22,
               backgroundColor: theme.colors.input.background,
               justifyContent: "center",
               alignItems: "center",
               marginRight: 16,
             }}
           >
-            <ArrowLeft color={theme.colors.text.primary} size={20} />
+            <ArrowLeft color={theme.colors.text.primary} size={22} />
           </TouchableOpacity>
-          <View>
-            <Text
-              style={{
-                fontSize: 20,
-                fontWeight: "bold",
-                color: theme.colors.text.primary,
-              }}
-            >
-              Review Request
+          <View style={{ flex: 1 }}>
+            <Text style={{
+              fontSize: 24,
+              fontWeight: "bold",
+              color: theme.colors.text.primary,
+            }}>
+              Review & Submit
             </Text>
-            <Text
-              style={{
-                fontSize: 14,
-                color: theme.colors.text.secondary,
-                marginTop: 2,
-              }}
-            >
-              Check everything before submitting
+            <Text style={{
+              fontSize: 14,
+              color: theme.colors.text.secondary,
+              marginTop: 2,
+            }}>
+              Final check before pickup scheduling
+            </Text>
+          </View>
+          <View style={{
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            backgroundColor: theme.colors.primary + "20",
+            borderRadius: 12,
+          }}>
+            <Text style={{
+              fontSize: 12,
+              fontWeight: "600",
+              color: theme.colors.primary,
+            }}>
+              {draftData.categories.length} Items
             </Text>
           </View>
         </View>
-      </View>
+      </Animated.View>
 
-      <ScrollView
+      <Animated.ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
           paddingTop: 24,
-          paddingHorizontal: 24,
+          paddingHorizontal: 20,
           paddingBottom: insets.bottom + 100,
         }}
         showsVerticalScrollIndicator={false}
+        opacity={fadeAnim}
+        transform={[{ scale: scaleAnim }]}
       >
-        {/* Categories Section */}
-        <View
-          style={{
-            backgroundColor: theme.colors.card.background,
-            borderRadius: 12,
+        {/* Summary Cards */}
+        <View style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}>
+          {/* Photos Summary Card */}
+          <View style={{
+            flex: 1,
+            backgroundColor: theme.colors.surface,
+            borderRadius: 16,
             padding: 16,
-            marginBottom: 16,
             borderWidth: 1,
             borderColor: theme.colors.border,
-          }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 12,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 16,
+            alignItems: 'center',
+          }}>
+            <View style={{
+              width: 48,
+              height: 48,
+              borderRadius: 24,
+              backgroundColor: '#3498DB20',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginBottom: 8,
+            }}>
+              <Camera size={24} color="#3498DB" />
+            </View>
+            <Text style={{
+              fontSize: 24,
+              fontWeight: "bold",
+              color: theme.colors.text.primary,
+            }}>
+              {totalPhotos}
+            </Text>
+            <Text style={{
+              fontSize: 12,
+              color: theme.colors.text.secondary,
+              marginTop: 2,
+            }}>
+              Photos
+            </Text>
+          </View>
+
+          {/* Weight Summary Card */}
+          <View style={{
+            flex: 1,
+            backgroundColor: theme.colors.surface,
+            borderRadius: 16,
+            padding: 16,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            alignItems: 'center',
+          }}>
+            <View style={{
+              width: 48,
+              height: 48,
+              borderRadius: 24,
+              backgroundColor: '#E67E2220',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginBottom: 8,
+            }}>
+              <Package size={24} color="#E67E22" />
+            </View>
+            <Text style={{
+              fontSize: 24,
+              fontWeight: "bold",
+              color: theme.colors.text.primary,
+            }}>
+              {totalWeight.toFixed(1)}
+            </Text>
+            <Text style={{
+              fontSize: 12,
+              color: theme.colors.text.secondary,
+              marginTop: 2,
+            }}>
+              kg Total
+            </Text>
+          </View>
+        </View>
+
+        {/* Categories Section */}
+        <View style={{
+          backgroundColor: theme.colors.surface,
+          borderRadius: 16,
+          padding: 20,
+          marginBottom: 16,
+          borderWidth: 1,
+          borderColor: theme.colors.border,
+          shadowColor: theme.colors.text.primary,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 8,
+          elevation: 2,
+        }}>
+          <View style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 16,
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{
+                width: 4,
+                height: 20,
+                borderRadius: 2,
+                backgroundColor: theme.colors.primary,
+                marginRight: 12,
+              }} />
+              <Text style={{
+                fontSize: 18,
                 fontWeight: "600",
                 color: theme.colors.text.primary,
+              }}>
+                Scrap Categories
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => router.push("/(tabs)/home")}
+              style={{
+                padding: 8,
+                borderRadius: 8,
+                backgroundColor: theme.colors.input.background,
               }}
             >
-              Scrap Categories ({draftData.categories.length})
-            </Text>
-            <TouchableOpacity onPress={() => router.push("/(tabs)/home")}>
               <Edit size={18} color={theme.colors.primary} />
             </TouchableOpacity>
           </View>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {draftData.categories.map((catObj) => {
+
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+            {draftData.categories.map((catObj, index) => {
               const categoryId = Object.keys(catObj)[0];
               const categoryName = catObj[categoryId];
+              const color = categoryColors[categoryId] || theme.colors.primary;
 
               return (
                 <View
@@ -250,30 +488,38 @@ export default function Review() {
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
-                    backgroundColor: theme.colors.primary + "20",
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    borderRadius: 16,
+                    backgroundColor: `${color}15`,
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
+                    borderRadius: 20,
+                    borderWidth: 1,
+                    borderColor: `${color}30`,
                   }}
                 >
-                  <View
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 4,
-                      backgroundColor: categoryColors[categoryId],
-                      marginRight: 6,
-                    }}
-                  />
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      color: theme.colors.primary,
-                      fontWeight: "500",
-                    }}
-                  >
+                  <View style={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: 6,
+                    backgroundColor: color,
+                    marginRight: 8,
+                  }} />
+                  <Text style={{
+                    fontSize: 14,
+                    fontWeight: "600",
+                    color: theme.colors.text.primary,
+                  }}>
                     {categoryName}
                   </Text>
+                  {draftData.weights?.[categoryId] && (
+                    <Text style={{
+                      fontSize: 12,
+                      fontWeight: "500",
+                      color: theme.colors.text.secondary,
+                      marginLeft: 8,
+                    }}>
+                      ({draftData.weights[categoryId]}kg)
+                    </Text>
+                  )}
                 </View>
               );
             })}
@@ -281,120 +527,121 @@ export default function Review() {
         </View>
 
         {/* Photos Section */}
-        <View
-          style={{
-            backgroundColor: theme.colors.card.background,
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 16,
-            borderWidth: 1,
-            borderColor: theme.colors.border,
-          }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 16,
-            }}
-          >
-            <View>
-              <Text
-                style={{
-                  fontSize: 16,
+        <View style={{
+          backgroundColor: theme.colors.surface,
+          borderRadius: 16,
+          padding: 20,
+          marginBottom: 16,
+          borderWidth: 1,
+          borderColor: theme.colors.border,
+          shadowColor: theme.colors.text.primary,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 8,
+          elevation: 2,
+        }}>
+          <View style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 20,
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{
+                width: 4,
+                height: 20,
+                borderRadius: 2,
+                backgroundColor: '#3498DB',
+                marginRight: 12,
+              }} />
+              <View>
+                <Text style={{
+                  fontSize: 18,
                   fontWeight: "600",
                   color: theme.colors.text.primary,
-                }}
-              >
-                Photos ({totalPhotos})
-              </Text>
-              <Text
-                style={{
+                }}>
+                  Scrap Photos
+                </Text>
+                <Text style={{
                   fontSize: 12,
                   color: theme.colors.text.secondary,
                   marginTop: 2,
-                }}
-              >
-                {draftData.categories.length} categories
-              </Text>
+                }}>
+                  {totalPhotos} photos across {draftData.categories.length} categories
+                </Text>
+              </View>
             </View>
             <TouchableOpacity
               onPress={() => router.push("/(tabs)/photo-upload")}
+              style={{
+                padding: 8,
+                borderRadius: 8,
+                backgroundColor: theme.colors.input.background,
+              }}
             >
-              <Edit size={18} color={theme.colors.primary} />
+              <Edit size={18} color="#3498DB" />
             </TouchableOpacity>
           </View>
 
           {draftData.categories.map((catObj) => {
             const categoryId = Object.keys(catObj)[0];
-            const categoryName = catObj[categoryId];
-
             const categoryPhotos = draftData.photos?.[categoryId] || [];
             const categoryWeight = draftData.weights?.[categoryId];
 
             if (categoryPhotos.length === 0) return null;
+
             return (
-              <View key={categoryId} style={{ marginBottom: 20 }}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: 12,
-                    paddingBottom: 8,
-                    borderBottomWidth: 1,
-                    borderBottomColor: theme.colors.border + "40",
-                  }}
-                >
+              <View key={categoryId} style={{ marginBottom: 24, backgroundColor: `${categoryColors[categoryId]}10`, borderRadius: 12, padding: 16 }}>
+                <View style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 12,
+                }}>
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    <View
-                      style={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 6,
-                        backgroundColor: categoryColors[categoryId] || theme.colors.primary,
-                        marginRight: 8,
-                      }}
-                    />
-                    <Text
-                      style={{
-                        fontSize: 16,
-                        fontWeight: "600",
-                        color: theme.colors.text.primary,
-                      }}
-                    >
+                    <View style={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: 6,
+                      backgroundColor: categoryColors[categoryId] || theme.colors.primary,
+                      marginRight: 8,
+                    }} />
+                    <Text style={{
+                      fontSize: 16,
+                      fontWeight: "600",
+                      color: theme.colors.text.primary,
+                    }}>
                       {categoryNames[categoryId]}
                     </Text>
                   </View>
 
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        color: theme.colors.text.secondary,
-                        marginRight: 8,
-                      }}
-                    >
-                      {categoryPhotos.length} photo
-                      {categoryPhotos.length !== 1 ? "s" : ""}
-                    </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <View style={{
+                      backgroundColor: `${categoryColors[categoryId]}20`,
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 12,
+                    }}>
+                      <Text style={{
+                        fontSize: 12,
+                        fontWeight: "600",
+                        color: categoryColors[categoryId],
+                      }}>
+                        {categoryPhotos.length} photo{categoryPhotos.length !== 1 ? 's' : ''}
+                      </Text>
+                    </View>
                     {categoryWeight && (
-                      <View
-                        style={{
-                          backgroundColor: theme.colors.primary + "20",
-                          paddingHorizontal: 10,
-                          paddingVertical: 4,
-                          borderRadius: 12,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            fontWeight: "600",
-                            color: theme.colors.primary,
-                          }}
-                        >
+                      <View style={{
+                        backgroundColor: theme.colors.primary + "20",
+                        paddingHorizontal: 10,
+                        paddingVertical: 4,
+                        borderRadius: 12,
+                      }}>
+                        <Text style={{
+                          fontSize: 12,
+                          fontWeight: "600",
+                          color: theme.colors.primary,
+                        }}>
                           {categoryWeight} kg
                         </Text>
                       </View>
@@ -405,7 +652,7 @@ export default function Review() {
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  style={{ marginBottom: 8 }}
+                  contentContainerStyle={{ paddingRight: 8 }}
                 >
                   <View style={{ flexDirection: "row", gap: 12 }}>
                     {categoryPhotos.map((photo, index) => (
@@ -413,9 +660,11 @@ export default function Review() {
                         key={index}
                         source={{ uri: photo }}
                         style={{
-                          width: 100,
-                          height: 100,
+                          width: 120,
+                          height: 120,
                           borderRadius: 8,
+                          borderWidth: 2,
+                          borderColor: `${categoryColors[categoryId]}30`,
                         }}
                       />
                     ))}
@@ -426,280 +675,336 @@ export default function Review() {
           })}
         </View>
 
-        {/* Weights Summary */}
-        {draftData.weights && Object.keys(draftData.weights).length > 0 && (
-          <View
-            style={{
-              backgroundColor: theme.colors.card.background,
-              borderRadius: 12,
-              padding: 16,
+        {/* Address Section - FIXED DARK MODE TEXT */}
+        {draftData.address && (
+          <View style={{
+            backgroundColor: theme.colors.surface,
+            borderRadius: 16,
+            padding: 20,
+            marginBottom: 16,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            shadowColor: theme.colors.text.primary,
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 8,
+            elevation: 2,
+          }}>
+            <View style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
               marginBottom: 16,
-              borderWidth: 1,
-              borderColor: theme.colors.border,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 16,
-                fontWeight: "600",
-                color: theme.colors.text.primary,
-                marginBottom: 12,
-              }}
-            >
-              Estimated Weights
-            </Text>
-            <View style={{ gap: 8 }}>
-              {Object.entries(draftData.weights).map(([cat, weight]) => (
-                <View
-                  key={cat}
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    paddingVertical: 4,
-                  }}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    <View
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: 4,
-                        backgroundColor: categoryColors[cat],
-                        marginRight: 8,
-                      }}
-                    />
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        color: theme.colors.text.primary,
-                      }}
-                    >
-                      {categoryNames[cat]}
-                    </Text>
-                  </View>
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "600",
-                      color: theme.colors.primary,
-                    }}
-                  >
-                    {weight} kg
-                  </Text>
-                </View>
-              ))}
-
-              {/* Total Weight */}
-              <View
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{
+                  width: 4,
+                  height: 20,
+                  borderRadius: 2,
+                  backgroundColor: '#9B59B6',
+                  marginRight: 12,
+                }} />
+                <Text style={{
+                  fontSize: 18,
+                  fontWeight: "600",
+                  color: theme.colors.text.primary,
+                }}>
+                  Pickup Address
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => router.push("/(tabs)/address")}
                 style={{
-                  marginTop: 8,
-                  paddingTop: 12,
-                  borderTopWidth: 1,
-                  borderTopColor: theme.colors.border,
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
+                  padding: 8,
+                  borderRadius: 8,
+                  backgroundColor: theme.colors.input.background,
                 }}
               >
-                <Text
-                  style={{
-                    fontSize: 16,
-                    fontWeight: "bold",
-                    color: theme.colors.text.primary,
-                  }}
-                >
-                  Total Estimated Weight
+                <Edit size={18} color="#9B59B6" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'flex-start',
+              backgroundColor: `${theme.colors.primary}08`,
+              borderRadius: 12,
+              padding: 16,
+              borderWidth: 1,
+              borderColor: `${theme.colors.primary}15`,
+            }}>
+              <View style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: `${theme.colors.primary}20`,
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginRight: 12,
+                marginTop: 2,
+              }}>
+                <MapPin size={20} color={theme.colors.primary} />
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <Text style={{
+                  fontSize: 15,
+                  fontWeight: "600",
+                  color: theme.colors.text.primary,
+                  marginBottom: 4,
+                  lineHeight: 22,
+                }}>
+                  {draftData.address.address_line1}
                 </Text>
-                <Text
-                  style={{
-                    fontSize: 18,
-                    fontWeight: "bold",
-                    color: theme.colors.primary,
-                  }}
-                >
-                  {Object.values(draftData.weights)
-                    .reduce((sum, w) => sum + parseFloat(w || 0), 0)
-                    .toFixed(1)} kg
+
+                {draftData.address.address_line2 && (
+                  <Text style={{
+                    fontSize: 14,
+                    color: theme.colors.text.secondary,
+                    marginBottom: 4,
+                    lineHeight: 20,
+                  }}>
+                    {draftData.address.address_line2}
+                  </Text>
+                )}
+
+                <Text style={{
+                  fontSize: 14,
+                  color: theme.colors.text.secondary,
+                  marginBottom: 4,
+                  lineHeight: 20,
+                }}>
+                  {draftData.address.city} - {draftData.address.pincode}
+                </Text>
+
+                {draftData.address.landmark && (
+                  <Text style={{
+                    fontSize: 14,
+                    color: theme.colors.text.secondary,
+                    lineHeight: 20,
+                  }}>
+                    <Text style={{ fontWeight: '500' }}>Landmark:</Text> {draftData.address.landmark}
+                  </Text>
+                )}
+
+                <Text style={{
+                  fontSize: 14,
+                  color: theme.colors.text.secondary,
+                  lineHeight: 20,
+                }}>
+                  {draftData.address.state}, India
                 </Text>
               </View>
             </View>
           </View>
         )}
-
-        {/* Address Section */}
-        {draftData.address && (
-          <View
-            style={{
-              backgroundColor: theme.colors.card.background,
-              borderRadius: 12,
-              padding: 16,
-              marginBottom: 16,
-              borderWidth: 1,
-              borderColor: theme.colors.border,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 12,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 16,
-                  fontWeight: "600",
-                  color: theme.colors.text.primary,
-                }}
-              >
-                Pickup Address
-              </Text>
-              <TouchableOpacity onPress={() => router.push("/(tabs)/address")}>
-                <Edit size={18} color={theme.colors.primary} />
-              </TouchableOpacity>
-            </View>
-            <Text style={{ fontSize: 14, lineHeight: 20 }}>
-              {draftData.address.address_line1}
-              {draftData.address.address_line2
-                ? `, ${draftData.address.address_line2}`
-                : ""}
-              {"\n"}
-              {draftData.address.city} - {draftData.address.pincode}
-              {draftData.address.landmark
-                ? `\n${draftData.address.landmark}`
-                : ""}
-            </Text>
-
-          </View>
-        )}
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* Submit Button */}
-      <View
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          backgroundColor: theme.colors.surface,
-          borderTopWidth: 1,
-          borderTopColor: theme.colors.border,
-          paddingHorizontal: 24,
-          paddingTop: 16,
-          paddingBottom: insets.bottom + 16,
-        }}
-      >
+      <View style={{
+        position: "absolute",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: theme.colors.surface,
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.border,
+        paddingHorizontal: 20,
+        paddingTop: 16,
+        paddingBottom: insets.bottom + 16,
+        shadowColor: theme.colors.text.primary,
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+        elevation: 10,
+      }}>
         <TouchableOpacity
           onPress={submitRequest}
           disabled={submitting}
           style={{
             backgroundColor: theme.colors.primary,
             height: 56,
-            borderRadius: 12,
+            borderRadius: 14,
             flexDirection: "row",
             justifyContent: "center",
             alignItems: "center",
-            opacity: submitting ? 0.6 : 1,
+            opacity: submitting ? 0.7 : 1,
+            shadowColor: theme.colors.primary,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 4,
           }}
         >
-          <Check size={20} color="white" style={{ marginRight: 8 }} />
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: "600",
-              color: "white",
-            }}
-          >
-            {submitting ? "Submitting..." : "Submit Request"}
+          {submitting ? (
+            <ActivityIndicator color="white" size="small" style={{ marginRight: 10 }} />
+          ) : (
+            <Check size={22} color="white" style={{ marginRight: 10 }} />
+          )}
+          <Text style={{
+            fontSize: 17,
+            fontWeight: "600",
+            color: "white",
+          }}>
+            {submitting ? "Processing..." : "Schedule Pickup"}
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Success Modal */}
-      <Modal visible={showSuccess} transparent animationType="fade">
-        <View
+      {/* Success Modal with Animation */}
+      <Modal
+        visible={showSuccess}
+        transparent
+        animationType="none"
+        onShow={animateModalIn}
+      >
+        <Animated.View
           style={{
             flex: 1,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
             justifyContent: "center",
             alignItems: "center",
             padding: 24,
+            opacity: modalOpacity,
           }}
         >
-          <View
+          <Animated.View
             style={{
               backgroundColor: theme.colors.surface,
-              borderRadius: 16,
+              borderRadius: 24,
               padding: 32,
               alignItems: "center",
               width: "100%",
               maxWidth: 400,
+              transform: [{ scale: modalScale }],
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.3,
+              shadowRadius: 20,
+              elevation: 20,
             }}
           >
-            <View
+            {/* Animated Success Icon */}
+            <Animated.View
               style={{
-                width: 80,
-                height: 80,
-                borderRadius: 40,
-                backgroundColor: theme.colors.success + "20",
-                justifyContent: "center",
-                alignItems: "center",
+                width: 120,
+                height: 120,
+                borderRadius: 60,
+                backgroundColor: `${theme.colors.success}20`,
+                justifyContent: 'center',
+                alignItems: 'center',
                 marginBottom: 24,
+                transform: [{ scale: successIconScale }],
               }}
             >
-              <CheckCircle size={40} color={theme.colors.success} />
-            </View>
-            <Text
-              style={{
-                fontSize: 24,
-                fontWeight: "bold",
-                color: theme.colors.text.primary,
-                marginBottom: 8,
-              }}
-            >
-              Request Submitted!
+              <CheckCircle size={60} color={theme.colors.success || "#4CAF50"} />
+            </Animated.View>
+
+            <Text style={{
+              fontSize: 28,
+              fontWeight: "bold",
+              color: theme.colors.text.primary,
+              marginBottom: 8,
+              textAlign: 'center',
+            }}>
+              Pickup Scheduled!
             </Text>
-            <Text
-              style={{
-                fontSize: 16,
+
+            <Text style={{
+              fontSize: 16,
+              color: theme.colors.text.secondary,
+              textAlign: "center",
+              marginBottom: 24,
+              lineHeight: 24,
+            }}>
+              Your scrap pickup has been successfully scheduled. Our executive will contact you shortly.
+            </Text>
+
+            {/* Request ID Card */}
+            <View style={{
+              backgroundColor: `${theme.colors.primary}10`,
+              borderRadius: 16,
+              padding: 20,
+              width: '100%',
+              marginBottom: 32,
+              borderWidth: 1,
+              borderColor: `${theme.colors.primary}20`,
+              alignItems: 'center',
+            }}>
+              <Text style={{
+                fontSize: 12,
+                fontWeight: "500",
                 color: theme.colors.text.secondary,
-                textAlign: "center",
-                marginBottom: 16,
-              }}
-            >
-              Your pickup request has been successfully created
-            </Text>
-            <View
-              style={{
-                backgroundColor: theme.colors.primary + "20",
-                paddingHorizontal: 16,
-                paddingVertical: 12,
-                borderRadius: 8,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 12,
-                  color: theme.colors.text.secondary,
-                  marginBottom: 4,
-                }}
-              >
-                Request ID
+                marginBottom: 8,
+                letterSpacing: 1,
+              }}>
+                REQUEST ID
               </Text>
-              <Text
-                style={{
-                  fontSize: 20,
-                  fontWeight: "bold",
-                  color: theme.colors.primary,
-                }}
-              >
+              <Text style={{
+                fontSize: 28,
+                fontWeight: "bold",
+                color: theme.colors.primary,
+                letterSpacing: 2,
+              }}>
                 {requestId}
               </Text>
+              <Text style={{
+                fontSize: 12,
+                color: theme.colors.text.secondary,
+                marginTop: 8,
+              }}>
+                Save this ID for tracking
+              </Text>
             </View>
-          </View>
-        </View>
+
+            {/* Action Buttons */}
+            <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
+              <TouchableOpacity
+                onPress={animateModalOut}
+                style={{
+                  flex: 1,
+                  height: 56,
+                  borderRadius: 14,
+                  backgroundColor: theme.colors.primary,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  flexDirection: 'row',
+                  shadowColor: theme.colors.primary,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 4,
+                }}
+              >
+                <Home size={20} color="white" style={{ marginRight: 8 }} />
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: "600",
+                  color: "white",
+                }}>
+                  Go to Home ({redirectTimer}s)
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Progress Bar for timer */}
+            <View style={{
+              width: '100%',
+              height: 4,
+              backgroundColor: theme.colors.border,
+              borderRadius: 2,
+              marginTop: 16,
+              overflow: 'hidden',
+            }}>
+              <Animated.View style={{
+                width: `${(redirectTimer / 3) * 100}%`,
+                height: '100%',
+                backgroundColor: theme.colors.primary,
+                borderRadius: 2,
+              }} />
+            </View>
+          </Animated.View>
+        </Animated.View>
       </Modal>
     </View>
   );

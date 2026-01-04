@@ -401,16 +401,18 @@
 
 
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Dimensions } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowLeft, ArrowRight, MapPin } from "lucide-react-native";
+import { ArrowLeft, ArrowRight, MapPin, Plus, Check, X, Navigation } from "lucide-react-native";
 import { useTheme } from "../../utils/theme";
 import { getDraftRequest, getUserData, saveDraftRequest } from "../../utils/storage";
 import * as Location from "expo-location";
 import ApiService from "../../utils/ApiService";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const { width } = Dimensions.get('window');
 
 export default function Address() {
   const insets = useSafeAreaInsets();
@@ -422,6 +424,7 @@ export default function Address() {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [userToken, setUserToken] = useState("");
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
 
   const [form, setForm] = useState({
     address_line1: "",
@@ -444,15 +447,18 @@ export default function Address() {
 
   const detectLocation = async () => {
     try {
-      setLoading(true);
+      setIsDetectingLocation(true);
 
-      const { status } =
-        await Location.requestForegroundPermissionsAsync();
+      const { status } = await Location.requestForegroundPermissionsAsync();
 
       if (status !== "granted") {
         Alert.alert(
-          "Permission denied",
-          "Please allow location access"
+          "Permission Required",
+          "Please allow location access to automatically fill your address",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Settings", onPress: () => Location.requestForegroundPermissionsAsync() }
+          ]
         );
         return;
       }
@@ -483,11 +489,14 @@ export default function Address() {
           state: place.region || "",
           pincode: place.postalCode || "",
         }));
+
+        Alert.alert("Success", "Location detected successfully!");
       }
     } catch (err) {
-      Alert.alert("Error", "Unable to detect location");
+      console.error("Location error:", err);
+      Alert.alert("Error", "Unable to detect location. Please try again or enter manually.");
     } finally {
-      setLoading(false);
+      setIsDetectingLocation(false);
     }
   };
 
@@ -497,6 +506,7 @@ export default function Address() {
     if (!userToken) return;
 
     try {
+      setLoading(true);
       const res = await ApiService.get(`/userAddresses/`, {
         headers: {
           "Content-Type": "application/json",
@@ -505,7 +515,10 @@ export default function Address() {
       });
       setAddresses(res.data || []);
     } catch (e) {
-      console.error(e);
+      console.error("Fetch addresses error:", e);
+      Alert.alert("Error", "Unable to fetch addresses");
+    } finally {
+      setLoading(false);
     }
   }, [userToken]);
 
@@ -531,7 +544,7 @@ export default function Address() {
 
   const handleContinue = async () => {
     if (!selectedAddressId || !selectedAddress) {
-      Alert.alert("Select address", "Please select an address");
+      Alert.alert("Select Address", "Please select a pickup address to continue");
       return;
     }
 
@@ -548,10 +561,17 @@ export default function Address() {
   /* ---------------- CREATE ADDRESS ---------------- */
 
   const createAddress = async () => {
-    if (!form.address_line1 || !form.city || !form.pincode) {
-      Alert.alert("Error", "Please fill required fields");
+    const requiredFields = ['address_line1', 'city', 'pincode'];
+    const missingFields = requiredFields.filter(field => !form[field].trim());
+
+    if (missingFields.length > 0) {
+      Alert.alert(
+        "Required Fields",
+        `Please fill in: ${missingFields.map(f => f.replace('_', ' ')).join(', ')}`
+      );
       return;
     }
+
     const rrr = await getUserData();
     const USER_ID = rrr.id;
 
@@ -561,6 +581,7 @@ export default function Address() {
       country: "India",
       is_default: false,
     }
+
     setLoading(true);
     try {
       const res = await ApiService.post(`/userAddresses/`, addAddressPayload, {
@@ -569,19 +590,170 @@ export default function Address() {
           Authorization: `Bearer ${userToken}`,
         }
       });
-      console.log("res:::", res.data)
 
       if (res.success) {
         setAddresses((prev) => [...prev, res.data]);
         setSelectedAddressId(res.data.id);
         setSelectedAddress(res.data);
         setShowForm(false);
+
+        // Reset form
+        setForm({
+          address_line1: "",
+          address_line2: "",
+          landmark: "",
+          city: "",
+          state: "",
+          pincode: "",
+          latitude: null,
+          longitude: null,
+        });
+
+        Alert.alert("Success", "Address saved successfully!");
       }
     } catch (err) {
-      console.error(err);
+      console.error("Create address error:", err);
+      Alert.alert("Error", "Failed to save address. Please try again.");
     } finally {
       setLoading(false);
     }
+  };
+
+  /* ---------------- RENDER ADDRESS CARD ---------------- */
+
+  const renderAddressCard = (addr) => {
+    const selected = selectedAddressId === addr.id;
+
+    return (
+      <TouchableOpacity
+        key={addr.id}
+        onPress={() => toggleSelectAddress(addr.id, addr)}
+        style={{
+          width: width * 0.8,
+          marginRight: 16,
+          borderRadius: 16,
+          borderWidth: selected ? 2 : 1,
+          borderColor: selected ? theme.colors.primary : theme.colors.border,
+          backgroundColor: theme.colors.surface,
+          padding: 20,
+          shadowColor: theme.colors.text.primary,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 3,
+        }}
+      >
+        {/* Selection indicator */}
+        <View style={{
+          position: 'absolute',
+          top: 12,
+          right: 12,
+          width: 24,
+          height: 24,
+          borderRadius: 12,
+          borderWidth: 2,
+          borderColor: selected ? theme.colors.primary : theme.colors.border,
+          backgroundColor: selected ? theme.colors.primary : 'transparent',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          {selected && (
+            <Check size={14} color="white" />
+          )}
+        </View>
+
+        {/* Address Icon */}
+        <View style={{
+          width: 40,
+          height: 40,
+          borderRadius: 20,
+          backgroundColor: `${theme.colors.primary}20`,
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginBottom: 12
+        }}>
+          <MapPin
+            size={20}
+            color={theme.colors.primary}
+          />
+        </View>
+
+        {/* Address Details */}
+        <Text style={{
+          fontSize: 16,
+          fontWeight: "600",
+          color: theme.colors.text.primary,
+          marginBottom: 4
+        }}>
+          {addr.address_line1}
+        </Text>
+
+        {addr.address_line2 ? (
+          <Text style={{
+            fontSize: 14,
+            color: theme.colors.text.secondary,
+            marginBottom: 4
+          }}>
+            {addr.address_line2}
+          </Text>
+        ) : null}
+
+        {addr.landmark ? (
+          <Text style={{
+            fontSize: 14,
+            color: theme.colors.text.secondary,
+            marginBottom: 4
+          }}>
+            Near: {addr.landmark}
+          </Text>
+        ) : null}
+
+        <Text style={{
+          fontSize: 14,
+          color: theme.colors.text.secondary,
+          marginTop: 8
+        }}>
+          {addr.city}, {addr.state} - {addr.pincode}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  /* ---------------- RENDER FORM FIELD ---------------- */
+
+  const renderFormField = (field) => {
+    const label = field.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase());
+    const isRequired = ['address_line1', 'city', 'pincode'].includes(field);
+
+    return (
+      <View key={field} style={{ marginBottom: 16 }}>
+        <Text style={{
+          fontSize: 14,
+          fontWeight: "500",
+          color: theme.colors.text.primary,
+          marginBottom: 8,
+          marginLeft: 4
+        }}>
+          {label} {isRequired && <Text style={{ color: '#FF3B30' }}>*</Text>}
+        </Text>
+        <TextInput
+          placeholder={`Enter ${label.toLowerCase()}`}
+          placeholderTextColor={theme.colors.text.tertiary}
+          value={form[field]}
+          onChangeText={(t) => setForm((p) => ({ ...p, [field]: t }))}
+          style={{
+            backgroundColor: theme.colors.input.background || theme.colors.surface,
+            borderWidth: 1,
+            borderColor: form[field] ? theme.colors.primary : theme.colors.input.border,
+            borderRadius: 12,
+            paddingHorizontal: 16,
+            height: 56,
+            fontSize: 16,
+            color: theme.colors.text.primary,
+          }}
+        />
+      </View>
+    );
   };
 
   /* ---------------- UI ---------------- */
@@ -591,154 +763,327 @@ export default function Address() {
       <StatusBar style={theme.isDark ? "light" : "dark"} />
 
       {/* Header */}
-      <View style={{ paddingTop: insets.top + 16, paddingHorizontal: 24 }}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <ArrowLeft size={22} color={theme.colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={{ fontSize: 20, fontWeight: "bold", marginTop: 8 }}>
-          Pickup Address
-        </Text>
+      <View style={{
+        paddingTop: insets.top + 16,
+        paddingHorizontal: 20,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+        backgroundColor: theme.colors.surface
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: `${theme.colors.text.primary}10`,
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginRight: 12
+            }}
+          >
+            <ArrowLeft size={22} color={theme.colors.text.primary} />
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={{
+              fontSize: 24,
+              fontWeight: "bold",
+              color: theme.colors.text.primary
+            }}>
+              Pickup Address
+            </Text>
+            <Text style={{
+              fontSize: 14,
+              color: theme.colors.text.secondary,
+              marginTop: 2
+            }}>
+              Select or add a pickup location
+            </Text>
+          </View>
+        </View>
       </View>
 
-      {/* ADDRESS LIST */}
-      {addresses.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ paddingHorizontal: 16, marginTop: 24 }}
-        >
-          {addresses.map((addr) => {
-            const selected = selectedAddressId === addr.id;
-            return (
+      {/* Main Content */}
+      <ScrollView
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ADDRESS SELECTION SECTION */}
+        <View style={{ padding: 20 }}>
+          {loading && addresses.length === 0 ? (
+            <View style={{
+              height: 200,
+              justifyContent: 'center',
+              alignItems: 'center'
+            }}>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+              <Text style={{
+                marginTop: 12,
+                color: theme.colors.text.secondary
+              }}>
+                Loading addresses...
+              </Text>
+            </View>
+          ) : addresses.length > 0 ? (
+            <>
+              <Text style={{
+                fontSize: 18,
+                fontWeight: "600",
+                color: theme.colors.text.primary,
+                marginBottom: 16
+              }}>
+                Your Addresses
+              </Text>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ marginHorizontal: -4 }}
+                contentContainerStyle={{ paddingHorizontal: 4 }}
+              >
+                {addresses.map(renderAddressCard)}
+              </ScrollView>
+            </>
+          ) : (
+            <View style={{
+              backgroundColor: `${theme.colors.primary}10`,
+              borderRadius: 16,
+              padding: 24,
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: `${theme.colors.primary}20`,
+              borderStyle: 'dashed'
+            }}>
+              <MapPin
+                size={48}
+                color={theme.colors.primary}
+                style={{ marginBottom: 12 }}
+              />
+              <Text style={{
+                fontSize: 16,
+                fontWeight: "600",
+                color: theme.colors.text.primary,
+                marginBottom: 8,
+                textAlign: 'center'
+              }}>
+                No Addresses Found
+              </Text>
+              <Text style={{
+                fontSize: 14,
+                color: theme.colors.text.secondary,
+                textAlign: 'center',
+                marginBottom: 20
+              }}>
+                Add your first pickup address to continue
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* FORM OR ADD BUTTON */}
+        {!showForm ? (
+          <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
+            <TouchableOpacity
+              onPress={() => setShowForm(true)}
+              style={{
+                height: 56,
+                borderRadius: 12,
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                borderColor: theme.colors.primary,
+                borderStyle: 'dashed',
+                justifyContent: 'center',
+                alignItems: 'center',
+                flexDirection: 'row'
+              }}
+            >
+              <Plus size={20} color={theme.colors.primary} style={{ marginRight: 8 }} />
+              <Text style={{
+                color: theme.colors.primary,
+                fontWeight: "600",
+                fontSize: 16
+              }}>
+                Add New Address
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          /* ADDRESS FORM */
+          <View style={{
+            padding: 20,
+            margin: 20,
+            marginTop: 0,
+            borderRadius: 20,
+            backgroundColor: theme.colors.surface,
+            shadowColor: theme.colors.text.primary,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.1,
+            shadowRadius: 12,
+            elevation: 5
+          }}>
+            {/* Form Header */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 24
+            }}>
+              <Text style={{
+                fontSize: 20,
+                fontWeight: "bold",
+                color: theme.colors.text.primary
+              }}>
+                Add New Address
+              </Text>
               <TouchableOpacity
-                key={addr.id}
-                onPress={() => toggleSelectAddress(addr.id, addr)}
+                onPress={() => {
+                  setShowForm(false);
+                  setForm({
+                    address_line1: "",
+                    address_line2: "",
+                    landmark: "",
+                    city: "",
+                    state: "",
+                    pincode: "",
+                    latitude: null,
+                    longitude: null,
+                  });
+                }}
                 style={{
-                  padding: 16,
-                  marginRight: 12,
-                  borderRadius: 12,
-                  borderWidth: 2,
-                  borderColor: selected
-                    ? theme.colors.primary
-                    : theme.colors.border,
-                  backgroundColor: theme.colors.surface,
-                  width: 220, height: 250
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: `${theme.colors.text.primary}10`,
+                  justifyContent: 'center',
+                  alignItems: 'center'
                 }}
               >
-                <Text style={{ fontWeight: "600" }}>
-                  {addr.address_line1}
-                </Text>
-                <Text style={{ color: theme.colors.text.secondary }}>
-                  {addr.city} - {addr.pincode}
-                </Text>
+                <X size={20} color={theme.colors.text.primary} />
               </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      )}
+            </View>
 
-      {/* ADD ADDRESS BUTTON */}
-        <TouchableOpacity
-          onPress={() => setShowForm(true)}
-          style={{
-            margin: 24,
-            height: 56,
-            borderRadius: 12,
-            backgroundColor: theme.colors.primary,
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <Text style={{ color: "white", fontWeight: "600" }}>
-            Add Address
-          </Text>
-        </TouchableOpacity>
-
-      {/* ADDRESS FORM */}
-      {showForm && (
-        <ScrollView style={{ padding: 24 }}>
-          <TouchableOpacity
-            onPress={detectLocation}
-            disabled={loading}
-            style={{
-              backgroundColor: theme.colors.primary,
-              height: 56,
-              borderRadius: 12,
-              flexDirection: "row",
-              justifyContent: "center",
-              alignItems: "center",
-              marginBottom: 24,
-            }}
-          >
-            {loading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <>
-                <MapPin size={20} color="white" style={{ marginRight: 8 }} />
-                <Text
-                  style={{
+            {/* Location Detection Button */}
+            <TouchableOpacity
+              onPress={detectLocation}
+              disabled={isDetectingLocation}
+              style={{
+                height: 56,
+                borderRadius: 12,
+                backgroundColor: `${theme.colors.primary}10`,
+                borderWidth: 1,
+                borderColor: theme.colors.primary,
+                flexDirection: 'row',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 24
+              }}
+            >
+              {isDetectingLocation ? (
+                <>
+                  <ActivityIndicator color={theme.colors.primary} size="small" />
+                  <Text style={{
                     fontSize: 16,
                     fontWeight: "600",
-                    color: "white",
-                  }}
-                >
-                  Detect My Location
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
+                    color: theme.colors.primary,
+                    marginLeft: 8
+                  }}>
+                    Detecting Location...
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Navigation size={20} color={theme.colors.primary} style={{ marginRight: 8 }} />
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: "600",
+                    color: theme.colors.primary
+                  }}>
+                    Use Current Location
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
 
-          {["address_line1", "address_line2", "landmark", "city", "state", "pincode"].map(
-            (field) => (
-              <TextInput
-                key={field}
-                placeholder={field.replace("_", " ")}
-                value={form[field]}
-                onChangeText={(t) =>
-                  setForm((p) => ({ ...p, [field]: t }))
-                }
-                style={{
-                  backgroundColor: theme.colors.border,
-                  borderWidth: 1,
-                  borderColor: theme.colors.input.border,
-                  borderRadius: 12,
-                  paddingHorizontal: 16,
-                  height: 56, marginVertical: 5,
-                  fontSize: 16,
-                  color: theme.colors.text.primary,
+            {/* Form Fields */}
+            {['address_line1', 'address_line2', 'landmark', 'city', 'state', 'pincode'].map(renderFormField)}
+
+            {/* Action Buttons */}
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowForm(false);
+                  setForm({
+                    address_line1: "",
+                    address_line2: "",
+                    landmark: "",
+                    city: "",
+                    state: "",
+                    pincode: "",
+                    latitude: null,
+                    longitude: null,
+                  });
                 }}
-              />
-            )
-          )}
+                style={{
+                  flex: 1,
+                  height: 56,
+                  borderRadius: 12,
+                  backgroundColor: theme.colors.border,
+                  justifyContent: 'center',
+                  alignItems: 'center'
+                }}
+              >
+                <Text style={{
+                  color: theme.colors.text.secondary,
+                  fontWeight: "600",
+                  fontSize: 16
+                }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={createAddress}
-            disabled={loading}
-            style={{
-              backgroundColor: theme.colors.primary,
-              height: 56,
-              borderRadius: 12, marginBottom: 50,
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            {loading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text style={{ color: "white", fontWeight: "600" }}>
-                Save Address
-              </Text>
-            )}
-          </TouchableOpacity>
-        </ScrollView>
-      )}
+              <TouchableOpacity
+                onPress={createAddress}
+                disabled={loading}
+                style={{
+                  flex: 1,
+                  height: 56,
+                  borderRadius: 12,
+                  backgroundColor: theme.colors.primary,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  opacity: loading ? 0.7 : 1
+                }}
+              >
+                {loading ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={{
+                    color: "white",
+                    fontWeight: "600",
+                    fontSize: 16
+                  }}>
+                    Save Address
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
-      {/* CONTINUE */}
+        {/* Spacer for continue button */}
+        <View style={{ height: 100 }} />
+      </ScrollView>
+
+      {/* CONTINUE BUTTON (Fixed at bottom) */}
       <View
         style={{
-          padding: 24,
+          padding: 20,
+          paddingBottom: insets.bottom + 20,
           borderTopWidth: 1,
-          borderColor: theme.colors.border,
+          borderTopColor: theme.colors.border,
+          backgroundColor: theme.colors.surface
         }}
       >
         <TouchableOpacity
@@ -753,13 +1098,21 @@ export default function Address() {
             flexDirection: "row",
             justifyContent: "center",
             alignItems: "center",
+            opacity: selectedAddressId ? 1 : 0.6
           }}
         >
-
-          <Text style={{ color: "white", fontWeight: "600", marginRight: 8 }}>
-            Review Request
+          <Text style={{
+            color: selectedAddressId ? "white" : theme.colors.text.secondary,
+            fontWeight: "600",
+            fontSize: 16,
+            marginRight: 8
+          }}>
+            Continue to Review
           </Text>
-          <ArrowRight color="white" size={20} />
+          <ArrowRight
+            color={selectedAddressId ? "white" : theme.colors.text.secondary}
+            size={20}
+          />
         </TouchableOpacity>
       </View>
     </View>

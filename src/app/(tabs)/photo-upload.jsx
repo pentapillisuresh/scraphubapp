@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { View, Text, ScrollView, TouchableOpacity, Image, Alert, TextInput } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { Camera, Image as ImageIcon, X, ArrowLeft, ArrowRight, Plus } from "lucide-react-native";
 import { useTheme } from "@/utils/theme";
-import { getDraftRequest, saveDraftRequest } from "../../utils/storage";
+import { getDraftRequest, saveDraftRequest, clearDraftRequest } from "../../utils/storage";
 
 const categoryNames = {
   paper: "Paper",
@@ -30,14 +30,48 @@ const categoryColors = {
 export default function PhotoUpload() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
+  const params = useLocalSearchParams();
+
   const [categories, setCategories] = useState([]);
   const [photos, setPhotos] = useState({});
   const [weights, setWeights] = useState({});
   const [isCameraReady, setIsCameraReady] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
+
+  // 🔥 COMPLETE Reset function
+  const resetState = useCallback(() => {
+    console.log("🚀 Resetting PhotoUpload state COMPLETELY...");
+    setPhotos({});
+    setWeights({});
+    setCategories([]);
+    setHasLoaded(false);
+  }, []);
+
+  // 🔥 Check if we're coming from a fresh start
+  useEffect(() => {
+    console.log("📱 PhotoUpload component mounted");
+
+    // If we have a refresh param from Home, reset everything
+    if (params.refresh) {
+      console.log("🔄 Refresh param detected, resetting state");
+      resetState();
+      clearDraftRequest();
+    }
+
+    return () => {
+      console.log("📱 PhotoUpload component unmounting");
+    };
+  }, [params.refresh, resetState]);
 
   useFocusEffect(
     useCallback(() => {
-      loadDraft();
+      console.log("📸 PhotoUpload screen focused");
+
+      // 🔥 ALWAYS reset state first when screen comes into focus
+      resetState();
+
+      // Then load fresh data
+      loadFreshDraft();
 
       // Request permissions on focus
       (async () => {
@@ -49,24 +83,44 @@ export default function PhotoUpload() {
         // Cleanup when screen loses focus
         setIsCameraReady(true);
       };
-    }, [])
+    }, [resetState])
   );
 
-  const loadDraft = async () => {
-    const draft = await getDraftRequest();
-    console.log("draft:::", draft)
-    if (draft && draft.categories) {
-      setCategories(draft.categories);
-      if (draft.photos) {
-        setPhotos(draft.photos);
+  // 🔥 NEW: Load fresh draft (always starts clean)
+  const loadFreshDraft = useCallback(async () => {
+    try {
+      console.log("📥 Loading fresh draft...");
+      const draft = await getDraftRequest();
+      console.log("📦 Draft data found:", draft ? "Yes" : "No");
+
+      if (draft && draft.categories && draft.categories.length > 0) {
+        console.log("✅ Setting categories from draft:", draft.categories.length);
+        setCategories(draft.categories);
+
+        // Only load photos/weights if they exist
+        if (draft.photos && Object.keys(draft.photos).length > 0) {
+          console.log("🖼️ Setting photos from draft");
+          setPhotos(draft.photos);
+        }
+
+        if (draft.weights && Object.keys(draft.weights).length > 0) {
+          console.log("⚖️ Setting weights from draft");
+          setWeights(draft.weights);
+        }
+
+        setHasLoaded(true);
+      } else {
+        console.log("❌ No valid draft found, going back to Home");
+        // Clear any leftover data
+        await clearDraftRequest();
+        router.replace("/(tabs)/home");
       }
-      if (draft.weights) {
-        setWeights(draft.weights);
-      }
-    } else {
+    } catch (error) {
+      console.error("❌ Error loading draft:", error);
+      await clearDraftRequest();
       router.replace("/(tabs)/home");
     }
-  };
+  }, []);
 
   const pickImage = async (categoryId, useCamera = false) => {
     try {
@@ -194,6 +248,14 @@ export default function PhotoUpload() {
     }
 
     const draft = await getDraftRequest();
+    if (!draft || !draft.categories) {
+      Alert.alert("Error", "No categories found. Please start over.");
+      resetState();
+      clearDraftRequest();
+      router.replace("/(tabs)/home");
+      return;
+    }
+
     await saveDraftRequest({
       ...draft,
       photos,
@@ -201,6 +263,14 @@ export default function PhotoUpload() {
     });
 
     router.push("/(tabs)/address");
+  };
+
+  const handleBack = () => {
+    // 🔥 Reset state before going back
+    resetState();
+    // Also clear draft since user is going back to start over
+    clearDraftRequest();
+    router.back();
   };
 
   const totalPhotos = Object.values(photos).reduce(
@@ -212,6 +282,103 @@ export default function PhotoUpload() {
     const id = Object.keys(catObj)[0];
     return photos[id] && photos[id].length > 0;
   });
+
+  // Show loading if categories haven't loaded yet
+  if (!hasLoaded && categories.length === 0) {
+    return (
+      <View style={{
+        flex: 1,
+        backgroundColor: theme.colors.background,
+        justifyContent: 'center',
+        alignItems: 'center'
+      }}>
+        <StatusBar style={theme.isDark ? "light" : "dark"} />
+        <View style={{
+          width: 80,
+          height: 80,
+          borderRadius: 40,
+          backgroundColor: theme.colors.primary + "20",
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginBottom: 20,
+        }}>
+          <Text style={{ fontSize: 24, color: theme.colors.primary }}>📸</Text>
+        </View>
+        <Text style={{
+          marginTop: 20,
+          fontSize: 16,
+          fontWeight: '500',
+          color: theme.colors.text.secondary
+        }}>
+          Loading photos...
+        </Text>
+      </View>
+    );
+  }
+
+  // If categories array is empty (no draft), show message
+  if (categories.length === 0 && hasLoaded) {
+    return (
+      <View style={{
+        flex: 1,
+        backgroundColor: theme.colors.background,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20
+      }}>
+        <StatusBar style={theme.isDark ? "light" : "dark"} />
+        <View style={{
+          width: 100,
+          height: 100,
+          borderRadius: 50,
+          backgroundColor: theme.colors.primary + "10",
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginBottom: 20,
+        }}>
+          <Text style={{ fontSize: 40, color: theme.colors.primary }}>📦</Text>
+        </View>
+        <Text style={{
+          fontSize: 20,
+          fontWeight: 'bold',
+          color: theme.colors.text.primary,
+          marginBottom: 10,
+          textAlign: 'center'
+        }}>
+          No Categories Selected
+        </Text>
+        <Text style={{
+          fontSize: 14,
+          color: theme.colors.text.secondary,
+          marginBottom: 30,
+          textAlign: 'center'
+        }}>
+          Please go back and select categories first
+        </Text>
+        <TouchableOpacity
+          onPress={() => {
+            resetState();
+            clearDraftRequest();
+            router.replace("/(tabs)/home");
+          }}
+          style={{
+            backgroundColor: theme.colors.primary,
+            paddingHorizontal: 30,
+            paddingVertical: 15,
+            borderRadius: 12,
+          }}
+        >
+          <Text style={{
+            color: 'white',
+            fontSize: 16,
+            fontWeight: '600'
+          }}>
+            Go Back to Home
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
@@ -230,7 +397,7 @@ export default function PhotoUpload() {
       >
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={handleBack}
             style={{
               width: 40,
               height: 40,
