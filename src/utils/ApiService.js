@@ -11,8 +11,8 @@ export const initialAuthState = {
 
 const ApiService = (() => {
 
-  const baseURL = 'http://10.144.218.71:5001/api/v1'; // Or use a global variable or config import
-  // const baseURL = 'https://srabhubservices.scrabhub.com/api/v1'; // Or use a global variable or config import
+  // const baseURL = 'http://10.144.218.71:5001/api/v1'; // Or use a global variable or config import
+  const baseURL = 'https://scrapservice.vmrdaplots.in/api/v1'; // Or use a global variable or config import
 
 const axiosInstance = axios.create({
   baseURL,
