@@ -75,6 +75,7 @@ export default function Home() {
           color: theme.colors.primary,
           icon: Package,
         }));
+        console.log("rrr:::",formattedCategories)
         setCategories(formattedCategories);
       }
     } catch (error) {

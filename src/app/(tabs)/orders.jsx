@@ -981,7 +981,7 @@ export default function Orders() {
                                 {item.RequestImages.map((img) => (
                                   <Image
                                     key={img.id}
-                                    source={{ uri: `http://192.168.0.13:5001/${img.image_url}` }}
+                                    source={{ uri: `https://scrapservice.vmrdaplots.in${img.image_url}` }}
                                     style={{
                                       width: 100,
                                       height: 100,
