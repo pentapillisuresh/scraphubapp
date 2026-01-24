@@ -81,7 +81,7 @@ export default function Login() {
 
       if (response.success) {
        await sendSMS(response.phone,response.otp)
-        router.push({
+        router.replace({
           pathname: "/otp",
           params: {
             phoneNumber: response.phone,

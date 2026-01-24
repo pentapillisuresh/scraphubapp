@@ -102,7 +102,7 @@ export default function OTP() {
   await AsyncStorage.setItem("Token",response.token)
       // ✅ Route based on profile completion
       if (!response.user.full_name) {
-        router.push( {pathname: "/profile-setup", params: {
+        router.replace( {pathname: "/profile-setup", params: {
           phoneNumber: response.phone,
           otps: response.otp,              // ⚠️ For development only
           expiresAt: response.expires_at,

@@ -1,12 +1,5 @@
 import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-} from "react-native";
+import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform} from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
@@ -64,8 +57,6 @@ export default function ProfileSetup() {
         name: data.full_name,
       });
       // ✅ Navigate to OTP verification screen
-      console.log('userUpdate:::', response)
-
       router.replace({
         pathname: "/(tabs)/home",
         params: {
