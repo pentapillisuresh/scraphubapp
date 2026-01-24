@@ -1,18 +1,12 @@
 import React, { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-} from "react-native";
+import {View,Text,TextInput,TouchableOpacity,KeyboardAvoidingView,Image,Platform} from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Recycle, Phone, CheckCircle, XCircle } from "lucide-react-native";
 import { useTheme } from "../utils/theme";
 import ApiService from "../utils/ApiService";
+import { sendSMS } from "../components/sendSMS";
 
 export default function Login() {
   const insets = useSafeAreaInsets();
@@ -86,6 +80,7 @@ export default function Login() {
       );
 
       if (response.success) {
+       await sendSMS(response.phone,response.otp)
         router.push({
           pathname: "/otp",
           params: {
@@ -125,19 +120,18 @@ export default function Login() {
       >
         {/* Logo */}
         <View style={{ alignItems: "center", marginBottom: 48 }}>
-          <View
+        <Image
+            source={require("../../assets/images/scraplogo.jpg")}
             style={{
-              width: 80,
-              height: 80,
-              borderRadius: 40,
-              backgroundColor: theme.colors.primary,
+              width: 100,
+              height: 100,
               justifyContent: "center",
               alignItems: "center",
-              marginBottom: 16,
+              marginBottom: 24,  
+              borderRadius: 30,
+              backgroundColor: "rgba(255,255,255,0.3)",
             }}
-          >
-            <Recycle color="white" size={40} strokeWidth={2} />
-          </View>
+          />
           <Text
             style={{
               fontSize: 28,

@@ -25,17 +25,17 @@ export default function OTP() {
   const [timer, setTimer] = useState(30);
   const inputRefs = useRef([]);
 
-  useEffect(() => {
-    if (otps && typeof otps === "string" && otps.length === 6) {
-      const otpArray = otps.split("");
-      setOtp(otpArray);
+  // useEffect(() => {
+  //   if (otps && typeof otps === "string" && otps.length === 6) {
+  //     const otpArray = otps.split("");
+  //     setOtp(otpArray);
   
-      // Auto verify after small delay
-      setTimeout(() => {
-        verifyOtp(otps);
-      }, 300);
-    }
-  }, [otps]);
+  //     // Auto verify after small delay
+  //     setTimeout(() => {
+  //       verifyOtp(otps);
+  //     }, 300);
+  //   }
+  // }, [otps]);
   
   useEffect(() => {
     const interval = setInterval(() => {

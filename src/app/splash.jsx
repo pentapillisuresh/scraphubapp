@@ -1,9 +1,10 @@
 import React, { useEffect, useRef } from "react";
-import { View, Text, Animated } from "react-native";
+import { View, Text, Image, Animated } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
 import { Recycle } from "lucide-react-native";
 import { getUserData } from "../utils/storage";
+import rrr from "../../assets/images/scraplogo.jpg";
 
 export default function Splash() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -55,19 +56,20 @@ export default function Splash() {
           alignItems: "center",
         }}
       >
-        <View
-          style={{
-            width: 100,
-            height: 100,
-            borderRadius: 50,
-            backgroundColor: "rgba(255, 255, 255, 0.2)",
-            justifyContent: "center",
-            alignItems: "center",
-            marginBottom: 24,
-          }}
-        >
-          <Recycle color="white" size={50} strokeWidth={2} />
-        </View>
+       
+          <Image
+            source={require("../../assets/images/scraplogo.jpg")}
+            style={{
+              width: 100,
+              height: 100,
+              justifyContent: "center",
+              alignItems: "center",
+              marginBottom: 24,  
+              borderRadius: 30,
+              backgroundColor: "rgba(255,255,255,0.3)",
+            }}
+          />
+
 
         <Text
           style={{

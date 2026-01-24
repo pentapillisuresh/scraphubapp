@@ -3,7 +3,7 @@
     "name": "Scrap Express",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/scraplogo.jpeg",
+    "icon": "./assets/images/scraplogo.jpg",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -15,7 +15,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/scraplogo.jpeg",
+        "foregroundImage": "./assets/images/scraplogo.jpg",
         "backgroundColor": "#ffffff"
       },
       "permissions": [
@@ -34,7 +34,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/scraplogo.jpeg",
+          "image": "./assets/images/scraplogo.jpg",
           "imageWidth": 200,
           "resizeMode": "contain"
         }
@@ -61,7 +61,7 @@
     ],
     "web": {
       "bundler": "metro",
-      "favicon": "./assets/images/scraplogo.jpeg"
+      "favicon": "./assets/images/scraplogo.jpg"
     },
     "experiments": {
       "typedRoutes": true
