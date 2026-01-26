@@ -586,61 +586,69 @@ export default function Home() {
                     },
                     shadowOpacity: 0.1,
                     shadowRadius: 3.84,
+                    padding: 8,
+                    alignItems: 'center',
                   }}
                 >
-                  {/* Category Image */}
-                  <Image
-                    source={{ uri: category.image }}
+                  {/* Circular Image Container */}
+                  <View
                     style={{
-                      width: '100%',
+                      width: 100,
                       height: 100,
-                      backgroundColor: category.color + '20',
+                      borderRadius: 50,
+                      backgroundColor: isSelected
+                        ? "rgba(255, 255, 255, 0.2)"
+                        : category.color + "20",
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginBottom: 12,
+                      borderWidth: 2,
+                      borderColor: isSelected ? 'white' : category.color + '40',
+                      overflow: 'hidden',
                     }}
-                    resizeMode="cover"
-                  />
+                  >
+                    {category.image ? (
+                      <Image
+                        source={{ uri: category.image }}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          borderRadius: 40,
+                        }}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <Icon
+                        size={40}
+                        color={isSelected ? "white" : category.color}
+                      />
+                    )}
+                  </View>
 
                   {/* Category Content */}
-                  <View style={{ padding: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                      <View
-                        style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 18,
-                          backgroundColor: isSelected
-                            ? "rgba(255, 255, 255, 0.2)"
-                            : category.color + "20",
-                          justifyContent: "center",
-                          alignItems: "center",
-                          marginRight: 8,
-                        }}
-                      >
-                        <Icon
-                          size={20}
-                          color={isSelected ? "white" : category.color}
-                        />
-                      </View>
-                      <Text
-                        style={{
-                          fontSize: 16,
-                          fontWeight: "600",
-                          color: isSelected ? "white" : theme.colors.text.primary,
-                          flex: 1,
-                        }}
-                      >
-                        {category.name}
-                      </Text>
-                    </View>
-
+                  <View style={{ alignItems: 'center', width: '100%' }}>
                     <Text
                       style={{
-                        fontSize: 12,
-                        color: isSelected ? "rgba(255,255,255,0.8)" : theme.colors.text.secondary,
-                        lineHeight: 16,
+                        fontSize: 16,
+                        fontWeight: "600",
+                        color: isSelected ? "white" : theme.colors.text.primary,
+                        textAlign: 'center',
+                        marginBottom: 8,
                       }}
                     >
-                      {category.description}
+                      {category.name}
                     </Text>
+
+{/*                     <Text */}
+{/*                       style={{ */}
+{/*                         fontSize: 12, */}
+{/*                         color: isSelected ? "rgba(255,255,255,0.8)" : theme.colors.text.secondary, */}
+{/*                         lineHeight: 16, */}
+{/*                         textAlign: 'center', */}
+{/*                       }} */}
+{/*                     > */}
+{/*                       {category.description} */}
+{/*                     </Text> */}
 
                     {isSelected && (
                       <View style={{
@@ -652,7 +660,9 @@ export default function Home() {
                         borderRadius: 12,
                         backgroundColor: 'white',
                         justifyContent: 'center',
-                        alignItems: 'center'
+                        alignItems: 'center',
+                        borderWidth: 1,
+                        borderColor: theme.colors.primary,
                       }}>
                         <Text style={{ fontSize: 12, fontWeight: 'bold', color: theme.colors.primary }}>✓</Text>
                       </View>
@@ -674,7 +684,7 @@ export default function Home() {
               marginBottom: 16,
             }}
           >
-            Why Choose ScrapHub?
+            Why Choose ScrapExpress?
           </Text>
 
           <View style={{ gap: 12 }}>
