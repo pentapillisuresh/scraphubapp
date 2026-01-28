@@ -89,7 +89,7 @@ export default function Login() {
             expiresAt: response.expires_at,
           },
         });
-        setError(data.message);
+        setError(response.message);
         return;
       }
       

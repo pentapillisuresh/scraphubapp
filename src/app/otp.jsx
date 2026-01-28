@@ -15,6 +15,7 @@ import { useTheme } from "@/utils/theme";
 import { saveUserData } from "../utils/storage";
 import ApiService from "../utils/ApiService";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { sendSMS } from "../components/sendSMS";
 
 export default function OTP() {
   const insets = useSafeAreaInsets();
@@ -29,14 +30,14 @@ export default function OTP() {
   //   if (otps && typeof otps === "string" && otps.length === 6) {
   //     const otpArray = otps.split("");
   //     setOtp(otpArray);
-  
+
   //     // Auto verify after small delay
   //     setTimeout(() => {
   //       verifyOtp(otps);
   //     }, 300);
   //   }
   // }, [otps]);
-  
+
   useEffect(() => {
     const interval = setInterval(() => {
       setTimer((prev) => (prev > 0 ? prev - 1 : 0));
@@ -73,25 +74,26 @@ export default function OTP() {
         setError("Invalid OTP");
         return;
       }
-  const verifyPayload={
-    phone: phoneNumber,
-    otp: otps,
-  }
+      const verifyPayload = {
+        phone: phoneNumber,
+        otp: otpCode,
+      }
+      console.log("eee:::",verifyPayload)
       const response = await ApiService.post(
-        "auth/login/phone/verify",verifyPayload,
+        "auth/login/phone/verify", verifyPayload,
         {
           headers: {
             "Content-Type": "application/json",
           },
         }
       );
-  
-  
+
+      console.log("rrr::",response)
       if (!response.success) {
         setError(response.message || "Invalid OTP");
         return;
       }
-  
+
       // ✅ Save auth data
       await saveUserData({
         id: response.user.id,
@@ -99,15 +101,16 @@ export default function OTP() {
         name: response.user.full_name,
         isLoggedIn: true,
       });
-  await AsyncStorage.setItem("Token",response.token)
+      await AsyncStorage.setItem("Token", response.token)
       // ✅ Route based on profile completion
       if (!response.user.full_name) {
-        router.replace( {pathname: "/profile-setup", params: {
-          phoneNumber: response.phone,
-          otps: response.otp,              // ⚠️ For development only
-          expiresAt: response.expires_at,
-        }
-      });
+        router.replace({
+          pathname: "/profile-setup", params: {
+            phoneNumber: response.phone,
+            otps: response.otp,              // ⚠️ For development only
+            expiresAt: response.expires_at,
+          }
+        });
       } else {
         router.replace("/(tabs)/home");
       }
@@ -115,7 +118,7 @@ export default function OTP() {
       setError("Network error. Please try again.");
     }
   };
-  
+
   const handleResend = async () => {
     setTimer(30);
     setOtp(["", "", "", "", "", ""]);
@@ -133,6 +136,19 @@ export default function OTP() {
         },
       }
     );
+    console.log("rrr::", response)
+    if (response.success) {
+      await sendSMS(response.phone, response.otp)
+      // router.replace({
+      //   pathname: "/otp",
+      //   params: {
+      //     phoneNumber: response.phone,
+      //     otps: response.otp,              // ⚠️ For development only
+      //     expiresAt: response.expires_at,
+      //   },
+      // });
+      return;
+    }
 
   };
 
@@ -151,7 +167,7 @@ export default function OTP() {
         }}
       >
         {/* Header */}
-        <TouchableOpacity
+        {/* <TouchableOpacity
           onPress={() => router.back()}
           style={{
             width: 40,
@@ -164,7 +180,7 @@ export default function OTP() {
           }}
         >
           <ArrowLeft color={theme.colors.text.primary} size={20} />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
         {/* Title */}
         <View style={{ marginBottom: 48 }}>
@@ -278,6 +294,28 @@ export default function OTP() {
             </TouchableOpacity>
           )}
         </View>
+        <TouchableOpacity
+          onPress={() => router.push('./login')}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: theme.colors.input.background,
+            justifyContent: "center",
+            alignItems: "center",
+            marginBottom: 32,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 14,
+              fontWeight: "600",
+              color: theme.colors.primary,
+            }}
+          >
+            Login
+          </Text>
+        </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   );
