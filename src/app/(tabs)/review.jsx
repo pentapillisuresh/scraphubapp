@@ -1,16 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-  Alert,
-  Modal,
-  Animated,
-  Dimensions,
-  ActivityIndicator
-} from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Modal, Animated, Dimensions, ActivityIndicator} from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -133,7 +122,7 @@ export default function Review() {
           }
           return prev - 1;
         });
-      }, 1000);
+      }, 3000);
     });
   };
 
@@ -156,7 +145,7 @@ export default function Review() {
 
           // 🔥 Clear ALL draft data from storage
           clearDraftRequest();
-      router.replace("/(tabs)/home");
+      router.replace("/(tabs)/orders");
     });
   };
 
@@ -948,13 +937,13 @@ export default function Review() {
               }}>
                 {requestId}
               </Text>
-{/*               <Text style={{ */}
-{/*                 fontSize: 12, */}
-{/*                 color: theme.colors.text.secondary, */}
-{/*                 marginTop: 8, */}
-{/*               }}> */}
-{/*                 Save this ID for tracking */}
-{/*               </Text> */}
+              {/* <Text style={{
+                fontSize: 12,
+                color: theme.colors.text.secondary,
+                marginTop: 8,
+              }}>
+                Save this ID for tracking
+              </Text> */}
             </View>
 
             {/* Action Buttons */}
