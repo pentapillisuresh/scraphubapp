@@ -79,7 +79,7 @@ export default function Splash() {
             marginBottom: 8,
           }}
         >
-          ScrapCollect
+          ScrapExpress
         </Text>
 
         <Text

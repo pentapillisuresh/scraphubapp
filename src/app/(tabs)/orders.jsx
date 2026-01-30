@@ -981,7 +981,7 @@ export default function Orders() {
                                 {item.RequestImages.map((img) => (
                                   <Image
                                     key={img.id}
-                                    source={{ uri: `https://scrapservice.vmrdaplots.in${img.image_url}` }}
+                                    source={{ uri: `https://service.scrapexpress.co.in${img.image_url}` }}
                                     style={{
                                       width: 100,
                                       height: 100,

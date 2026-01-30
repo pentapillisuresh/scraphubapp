@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Image, Dimensions, FlatList, 
 import { StatusBar } from "expo-status-bar";
 import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowRight, ChevronRight, Package, Star, Clock, TrendingUp } from "lucide-react-native";
+import { ArrowRight, ChevronRight, Package, Star, Clock, TrendingUp, Phone } from "lucide-react-native";
 import { useTheme } from "@/utils/theme";
 import { getUserData, getDraftRequest, saveDraftRequest, clearDraftRequest } from "../../utils/storage";
 import ApiService from "../../utils/ApiService";
@@ -639,17 +639,6 @@ export default function Home() {
                       {category.name}
                     </Text>
 
-{/*                     <Text */}
-{/*                       style={{ */}
-{/*                         fontSize: 12, */}
-{/*                         color: isSelected ? "rgba(255,255,255,0.8)" : theme.colors.text.secondary, */}
-{/*                         lineHeight: 16, */}
-{/*                         textAlign: 'center', */}
-{/*                       }} */}
-{/*                     > */}
-{/*                       {category.description} */}
-{/*                     </Text> */}
-
                     {isSelected && (
                       <View style={{
                         position: 'absolute',
@@ -776,6 +765,48 @@ export default function Home() {
                   Get instant cash on pickup
                 </Text>
               </View>
+            </View>
+          </View>
+
+          {/* Contact Line - ADDED HERE */}
+          <View style={{
+            marginTop: 20,
+            backgroundColor: theme.colors.primary + '10',
+            borderRadius: 12,
+            padding: 16,
+            borderWidth: 1,
+            borderColor: theme.colors.primary + '30',
+            flexDirection: 'row',
+            alignItems: 'center',
+          }}>
+            <View style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: theme.colors.primary + '20',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginRight: 12
+            }}>
+              <Phone size={20} color={theme.colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{
+                fontSize: 14,
+                fontWeight: '600',
+                color: theme.colors.text.primary,
+                marginBottom: 4,
+              }}>
+                Outside Vijayawada?
+              </Text>
+              <Text style={{
+                fontSize: 13,
+                color: theme.colors.text.secondary,
+                lineHeight: 18,
+              }}>
+                For scrap collection services outside Vijayawada, please contact:
+                <Text style={{ fontWeight: '700', color: theme.colors.primary }}> 7396313699</Text>
+              </Text>
             </View>
           </View>
         </View>

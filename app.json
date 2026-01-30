@@ -68,10 +68,13 @@
     },
     "extra": {
       "router": {
-        "origin": false
+        "origin": false,
+        "sitemap": false
+      },
+      "eas": {
+        "projectId": "c280cda9-fe7f-4ed4-bb0f-649b81ca5d32"
       }
     },
     "runtimeVersion": "1.0.0"
-
   }
 }

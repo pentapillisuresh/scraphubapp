@@ -48,7 +48,7 @@ export default function Review() {
   const [submitting, setSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [requestId, setRequestId] = useState("");
-  const [redirectTimer, setRedirectTimer] = useState(3);
+  const [redirectTimer, setRedirectTimer] = useState(10);
 
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -151,7 +151,7 @@ export default function Review() {
       }),
     ]).start(() => {
       setShowSuccess(false);
-      setRedirectTimer(3);
+      setRedirectTimer(10);
        setDraftData(null);
 
           // 🔥 Clear ALL draft data from storage
@@ -948,13 +948,13 @@ export default function Review() {
               }}>
                 {requestId}
               </Text>
-              <Text style={{
-                fontSize: 12,
-                color: theme.colors.text.secondary,
-                marginTop: 8,
-              }}>
-                Save this ID for tracking
-              </Text>
+{/*               <Text style={{ */}
+{/*                 fontSize: 12, */}
+{/*                 color: theme.colors.text.secondary, */}
+{/*                 marginTop: 8, */}
+{/*               }}> */}
+{/*                 Save this ID for tracking */}
+{/*               </Text> */}
             </View>
 
             {/* Action Buttons */}
@@ -997,7 +997,7 @@ export default function Review() {
               overflow: 'hidden',
             }}>
               <Animated.View style={{
-                width: `${(redirectTimer / 3) * 100}%`,
+                width: `${(redirectTimer / 10) * 100}%`,
                 height: '100%',
                 backgroundColor: theme.colors.primary,
                 borderRadius: 2,

@@ -425,7 +425,7 @@ export default function Account() {
               marginBottom: 4,
             }}
           >
-            ScrapCollect
+            ScrapExpress
           </Text>
           <Text
             style={{
