@@ -55,6 +55,7 @@ export default function ProfileSetup() {
         id: data.id,
         phone: data.phone,
         name: data.full_name,
+        isLoggedIn: true,
       });
       // ✅ Navigate to OTP verification screen
       router.replace({

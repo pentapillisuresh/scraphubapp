@@ -11,7 +11,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "xyz.create.CreateExpoEnvironment"
+      "bundleIdentifier": "com.enfynex.scrapexpress"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,7 +22,7 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
-      "package": "xyz.create.CreateExpoEnvironment"
+      "package": "com.enfynex.scrapexpress"
     },
     "plugins": [
       [

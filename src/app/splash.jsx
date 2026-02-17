@@ -28,13 +28,14 @@ export default function Splash() {
     // Check authentication and navigate
     setTimeout(async () => {
       const userData = await getUserData();
-      if (userData && userData.isLoggedIn && userData.name) {
-        router.replace("/(tabs)/home");
-      } else if (userData && userData.isLoggedIn) {
-        router.replace("/profile-setup");
-      } else {
-        router.replace("/login");
-      }
+      console.log("rrr:::",userData)
+      // if (userData && userData.isLoggedIn && userData.name) {
+      //   router.replace("/(tabs)/home");
+      // } else if (userData && userData.isLoggedIn) {
+      //   router.replace("/profile-setup");
+      // } else {
+      //   router.replace("/login");
+      // }
     }, 2000);
   }, []);
 
