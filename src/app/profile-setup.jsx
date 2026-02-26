@@ -21,7 +21,6 @@ export default function ProfileSetup() {
   useEffect(() => {
     const rrr = async () => {
       const token = await AsyncStorage.getItem("Token");
-      console.log("rrr::", token)
       setUserToken(token);
     }
     rrr();

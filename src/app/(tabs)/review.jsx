@@ -50,7 +50,6 @@ export default function Review() {
     useCallback(() => {
       async function fetchDraft() {
         const draft = await getDraftRequest();
-        console.log("Draft data:", draft);
         if (draft) {
           setDraftData(draft);
 

@@ -40,7 +40,6 @@ export default function PhotoUpload() {
 
   // 🔥 COMPLETE Reset function
   const resetState = useCallback(() => {
-    console.log("🚀 Resetting PhotoUpload state COMPLETELY...");
     setPhotos({});
     setWeights({});
     setCategories([]);
@@ -49,11 +48,9 @@ export default function PhotoUpload() {
 
   // 🔥 Check if we're coming from a fresh start
   useEffect(() => {
-    console.log("📱 PhotoUpload component mounted");
 
     // If we have a refresh param from Home, reset everything
     if (params.refresh) {
-      console.log("🔄 Refresh param detected, resetting state");
       resetState();
       clearDraftRequest();
     }
@@ -65,7 +62,6 @@ export default function PhotoUpload() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log("📸 PhotoUpload screen focused");
 
       // 🔥 ALWAYS reset state first when screen comes into focus
       resetState();
@@ -89,28 +85,22 @@ export default function PhotoUpload() {
   // 🔥 NEW: Load fresh draft (always starts clean)
   const loadFreshDraft = useCallback(async () => {
     try {
-      console.log("📥 Loading fresh draft...");
       const draft = await getDraftRequest();
-      console.log("📦 Draft data found:", draft ? "Yes" : "No");
 
       if (draft && draft.categories && draft.categories.length > 0) {
-        console.log("✅ Setting categories from draft:", draft.categories.length);
         setCategories(draft.categories);
 
         // Only load photos/weights if they exist
         if (draft.photos && Object.keys(draft.photos).length > 0) {
-          console.log("🖼️ Setting photos from draft");
           setPhotos(draft.photos);
         }
 
         if (draft.weights && Object.keys(draft.weights).length > 0) {
-          console.log("⚖️ Setting weights from draft");
           setWeights(draft.weights);
         }
 
         setHasLoaded(true);
       } else {
-        console.log("❌ No valid draft found, going back to Home");
         // Clear any leftover data
         await clearDraftRequest();
         router.replace("/(tabs)/home");

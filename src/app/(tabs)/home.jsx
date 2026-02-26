@@ -75,7 +75,6 @@ export default function Home() {
           color: theme.colors.primary,
           icon: Package,
         }));
-        console.log("rrr:::",formattedCategories)
         setCategories(formattedCategories);
       }
     } catch (error) {
@@ -85,7 +84,6 @@ export default function Home() {
 
   // Reset all local state
   const resetState = useCallback(() => {
-    console.log("Resetting Home screen state...");
     setSelectedCategories([]);
     setCurrentIndex(0);
     scrollX.setValue(0);
@@ -164,7 +162,6 @@ export default function Home() {
   // 🔥 Reset when screen comes into focus (user navigates back to Home)
   useFocusEffect(
     useCallback(() => {
-      console.log("Home screen focused, resetting state...");
 
       // Reset local state
       resetState();

@@ -7,7 +7,6 @@ export const sendSMS = async (mobile, otp) => {
   const url = `https://pgapi.smartping.ai/fe/api/v1/send?username=scrapexpress.trans&password=xLyBc&unicode=false&from=SCPEXP&to=${mobile}&text=${message}&dltContentId=1707176916132647568`;
   try {
     const response = await fetch(url);
-    console.log("rrr::::",response)
 
     return await response.text(); // SmartPing returns plain text
   } catch (error) {

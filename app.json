@@ -48,13 +48,6 @@
           }
         }
       ],
-      [
-        "expo-video",
-        {
-          "supportsBackgroundPlayback": true,
-          "supportsPictureInPicture": true
-        }
-      ],
       "expo-font",
       "expo-secure-store",
       "expo-web-browser"
